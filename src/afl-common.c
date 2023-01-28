@@ -9,7 +9,7 @@
                         Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2022 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include "forkserver.h"
 #ifndef _GNU_SOURCE
   #define _GNU_SOURCE
 #endif
@@ -47,6 +48,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 
 u8  be_quiet = 0;
 u8 *doc_path = "";
@@ -55,6 +57,63 @@ u8  last_intr = 0;
 #ifndef AFL_PATH
   #define AFL_PATH "/usr/local/lib/afl/"
 #endif
+
+void set_sanitizer_defaults() {
+
+  /* Set sane defaults for ASAN if nothing else is specified. */
+  u8 *have_asan_options = getenv("ASAN_OPTIONS");
+  u8 *have_ubsan_options = getenv("UBSAN_OPTIONS");
+  u8 *have_msan_options = getenv("MSAN_OPTIONS");
+  u8 *have_lsan_options = getenv("LSAN_OPTIONS");
+  u8  have_san_options = 0;
+  if (have_asan_options || have_ubsan_options || have_msan_options ||
+      have_lsan_options)
+    have_san_options = 1;
+  u8 default_options[1024] =
+      "detect_odr_violation=0:abort_on_error=1:symbolize=0:malloc_context_"
+      "size=0:allocator_may_return_null=1:handle_segv=0:handle_sigbus=0:"
+      "handle_abort=0:handle_sigfpe=0:handle_sigill=0:";
+
+  if (!have_lsan_options) strcat(default_options, "detect_leaks=0:");
+
+  /* Set sane defaults for ASAN if nothing else is specified. */
+
+  if (!have_san_options) setenv("ASAN_OPTIONS", default_options, 1);
+
+  /* Set sane defaults for UBSAN if nothing else is specified. */
+
+  if (!have_san_options) setenv("UBSAN_OPTIONS", default_options, 1);
+
+  /* MSAN is tricky, because it doesn't support abort_on_error=1 at this
+     point. So, we do this in a very hacky way. */
+
+  if (!have_msan_options) {
+
+    u8 buf[2048] = "";
+    if (!have_san_options) strcpy(buf, default_options);
+    strcat(buf, "exit_code=" STRINGIFY(MSAN_ERROR) ":msan_track_origins=0:");
+    setenv("MSAN_OPTIONS", buf, 1);
+
+  }
+
+  /* LSAN, too, does not support abort_on_error=1. (is this still true??) */
+
+  if (!have_lsan_options) {
+
+    u8 buf[2048] = "";
+    if (!have_san_options) strcpy(buf, default_options);
+    strcat(buf,
+           "exitcode=" STRINGIFY(
+               LSAN_ERROR) ":fast_unwind_on_malloc=0:print_suppressions=0:");
+    setenv("LSAN_OPTIONS", buf, 1);
+
+  }
+
+  /* Envs for QASan */
+  setenv("QASAN_MAX_CALL_STACK", "0", 0);
+  setenv("QASAN_SYMBOLIZE", "0", 0);
+
+}
 
 u32 check_binary_signatures(u8 *fn) {
 
@@ -456,37 +515,56 @@ u8 *find_afl_binary(u8 *own_loc, u8 *fname) {
 
 }
 
-/* Parses the kill signal environment variable, FATALs on error.
-  If the env is not set, sets the env to default_signal for the signal handlers
-  and returns the default_signal. */
-int parse_afl_kill_signal_env(u8 *afl_kill_signal_env, int default_signal) {
+int parse_afl_kill_signal(u8 *numeric_signal_as_str, int default_signal) {
 
-  if (afl_kill_signal_env && afl_kill_signal_env[0]) {
+  if (numeric_signal_as_str && numeric_signal_as_str[0]) {
 
     char *endptr;
     u8    signal_code;
-    signal_code = (u8)strtoul(afl_kill_signal_env, &endptr, 10);
+    signal_code = (u8)strtoul(numeric_signal_as_str, &endptr, 10);
     /* Did we manage to parse the full string? */
-    if (*endptr != '\0' || endptr == (char *)afl_kill_signal_env) {
+    if (*endptr != '\0' || endptr == (char *)numeric_signal_as_str) {
 
-      FATAL("Invalid AFL_KILL_SIGNAL: %s (expected unsigned int)",
-            afl_kill_signal_env);
+      FATAL("Invalid signal name: %s", numeric_signal_as_str);
+
+    } else {
+
+      return signal_code;
 
     }
 
-    return signal_code;
+  }
 
-  } else {
+  return default_signal;
 
-    char *sigstr = alloc_printf("%d", default_signal);
-    if (!sigstr) { FATAL("Failed to alloc mem for signal buf"); }
+}
 
-    /* Set the env for signal handler */
-    setenv("AFL_KILL_SIGNAL", sigstr, 1);
-    free(sigstr);
-    return default_signal;
+void configure_afl_kill_signals(afl_forkserver_t *fsrv,
+                                char             *afl_kill_signal_env,
+                                char             *afl_fsrv_kill_signal_env,
+                                int               default_server_kill_signal) {
+
+  afl_kill_signal_env =
+      afl_kill_signal_env ? afl_kill_signal_env : getenv("AFL_KILL_SIGNAL");
+  afl_fsrv_kill_signal_env = afl_fsrv_kill_signal_env
+                                 ? afl_fsrv_kill_signal_env
+                                 : getenv("AFL_FORK_SERVER_KILL_SIGNAL");
+
+  fsrv->child_kill_signal = parse_afl_kill_signal(afl_kill_signal_env, SIGKILL);
+
+  if (afl_kill_signal_env && !afl_fsrv_kill_signal_env) {
+
+    /*
+    Set AFL_FORK_SERVER_KILL_SIGNAL to the value of AFL_KILL_SIGNAL for
+    backwards compatibility. However, if AFL_FORK_SERVER_KILL_SIGNAL is set, is
+    takes precedence.
+    */
+    afl_fsrv_kill_signal_env = afl_kill_signal_env;
 
   }
+
+  fsrv->fsrv_kill_signal = parse_afl_kill_signal(afl_fsrv_kill_signal_env,
+                                                 default_server_kill_signal);
 
 }
 

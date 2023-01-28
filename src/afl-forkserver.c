@@ -13,7 +13,7 @@
 
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2022 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ void afl_fsrv_init(afl_forkserver_t *fsrv) {
   fsrv->init_tmout = EXEC_TIMEOUT * FORK_WAIT_MULT;
   fsrv->mem_limit = MEM_LIMIT;
   fsrv->out_file = NULL;
-  fsrv->kill_signal = SIGKILL;
+  fsrv->child_kill_signal = SIGKILL;
 
   /* exec related stuff */
   fsrv->child_pid = -1;
@@ -143,7 +143,7 @@ void afl_fsrv_init_dup(afl_forkserver_t *fsrv_to, afl_forkserver_t *from) {
   fsrv_to->no_unlink = from->no_unlink;
   fsrv_to->uses_crash_exitcode = from->uses_crash_exitcode;
   fsrv_to->crash_exitcode = from->crash_exitcode;
-  fsrv_to->kill_signal = from->kill_signal;
+  fsrv_to->child_kill_signal = from->child_kill_signal;
   fsrv_to->debug = from->debug;
   fsrv_to->replay = from->replay;
 
@@ -702,70 +702,8 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
 
     if (!getenv("LD_BIND_LAZY")) { setenv("LD_BIND_NOW", "1", 1); }
 
-    /* Set sane defaults for ASAN if nothing else is specified. */
-
-    if (!getenv("ASAN_OPTIONS"))
-      setenv("ASAN_OPTIONS",
-             "abort_on_error=1:"
-             "detect_leaks=0:"
-             "malloc_context_size=0:"
-             "symbolize=0:"
-             "allocator_may_return_null=1:"
-             "detect_odr_violation=0:"
-             "handle_segv=0:"
-             "handle_sigbus=0:"
-             "handle_abort=0:"
-             "handle_sigfpe=0:"
-             "handle_sigill=0",
-             1);
-
-    /* Set sane defaults for UBSAN if nothing else is specified. */
-
-    if (!getenv("UBSAN_OPTIONS"))
-      setenv("UBSAN_OPTIONS",
-             "halt_on_error=1:"
-             "abort_on_error=1:"
-             "malloc_context_size=0:"
-             "allocator_may_return_null=1:"
-             "symbolize=0:"
-             "handle_segv=0:"
-             "handle_sigbus=0:"
-             "handle_abort=0:"
-             "handle_sigfpe=0:"
-             "handle_sigill=0",
-             1);
-
-    /* Envs for QASan */
-    setenv("QASAN_MAX_CALL_STACK", "0", 0);
-    setenv("QASAN_SYMBOLIZE", "0", 0);
-
-    /* MSAN is tricky, because it doesn't support abort_on_error=1 at this
-       point. So, we do this in a very hacky way. */
-
-    if (!getenv("MSAN_OPTIONS"))
-      setenv("MSAN_OPTIONS",
-           "exit_code=" STRINGIFY(MSAN_ERROR) ":"
-           "symbolize=0:"
-           "abort_on_error=1:"
-           "malloc_context_size=0:"
-           "allocator_may_return_null=1:"
-           "msan_track_origins=0:"
-           "handle_segv=0:"
-           "handle_sigbus=0:"
-           "handle_abort=0:"
-           "handle_sigfpe=0:"
-           "handle_sigill=0",
-           1);
-
-    /* LSAN, too, does not support abort_on_error=1. */
-
-    if (!getenv("LSAN_OPTIONS"))
-      setenv("LSAN_OPTIONS",
-            "exitcode=" STRINGIFY(LSAN_ERROR) ":"
-            "fast_unwind_on_malloc=0:"
-            "symbolize=0:"
-            "print_suppressions=0",
-            1);
+    /* Set sane defaults for sanitizers */
+    set_sanitizer_defaults();
 
     fsrv->init_child_func(fsrv, argv);
 
@@ -807,7 +745,7 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
       s32 tmp_pid = fsrv->fsrv_pid;
       if (tmp_pid > 0) {
 
-        kill(tmp_pid, fsrv->kill_signal);
+        kill(tmp_pid, fsrv->child_kill_signal);
         fsrv->fsrv_pid = -1;
 
       }
@@ -818,7 +756,7 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
       s32 tmp_pid = fsrv->fsrv_pid;
       if (tmp_pid > 0) {
 
-        kill(tmp_pid, fsrv->kill_signal);
+        kill(tmp_pid, fsrv->child_kill_signal);
         fsrv->fsrv_pid = -1;
 
       }
@@ -1256,11 +1194,11 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
 
 void afl_fsrv_kill(afl_forkserver_t *fsrv) {
 
-  if (fsrv->child_pid > 0) { kill(fsrv->child_pid, fsrv->kill_signal); }
+  if (fsrv->child_pid > 0) { kill(fsrv->child_pid, fsrv->child_kill_signal); }
   if (fsrv->fsrv_pid > 0) {
 
-    kill(fsrv->fsrv_pid, fsrv->kill_signal);
-    if (waitpid(fsrv->fsrv_pid, NULL, 0) <= 0) { WARNF("error waitpid\n"); }
+    kill(fsrv->fsrv_pid, fsrv->fsrv_kill_signal);
+    waitpid(fsrv->fsrv_pid, NULL, 0);
 
   }
 
@@ -1559,7 +1497,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
     s32 tmp_pid = fsrv->child_pid;
     if (tmp_pid > 0) {
 
-      kill(tmp_pid, fsrv->kill_signal);
+      kill(tmp_pid, fsrv->child_kill_signal);
       fsrv->child_pid = -1;
 
     }
@@ -1656,7 +1594,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   /* Did we timeout? */
   if (unlikely(fsrv->last_run_timed_out)) {
 
-    fsrv->last_kill_signal = fsrv->kill_signal;
+    fsrv->last_kill_signal = fsrv->child_kill_signal;
     return FSRV_RUN_TMOUT;
 
   }

@@ -9,7 +9,7 @@
                         Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2022 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -174,7 +174,12 @@ int main(int argc, char **argv) {
       if (c == NULL) PFATAL("cpuset_create failed");
 
       cpuset_set(i, c);
-  #elif defined(__APPLE__)
+  #elif defined(__APPLE__) && defined(__x86_64__)
+      // the api is not workable on arm64, core's principle
+      // differs significantly hive of core per type vs individual ones.
+      // Possible TODO: For arm64 is to slightly change the meaning
+      // of gotcpu since it makes no sense on this platform
+      // but rather just displaying current policy ?
       thread_affinity_policy_data_t c = {i};
       thread_port_t native_thread = pthread_mach_thread_np(pthread_self());
       if (thread_policy_set(native_thread, THREAD_AFFINITY_POLICY,

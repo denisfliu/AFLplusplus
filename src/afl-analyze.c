@@ -9,7 +9,7 @@
                         Andrea Fioraldi <andreafioraldi@gmail.com>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
-   Copyright 2019-2022 AFLplusplus Project. All rights reserved.
+   Copyright 2019-2023 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ static void kill_child() {
 
   if (fsrv.child_pid > 0) {
 
-    kill(fsrv.child_pid, fsrv.kill_signal);
+    kill(fsrv.child_pid, fsrv.child_kill_signal);
     fsrv.child_pid = -1;
 
   }
@@ -656,28 +656,6 @@ static void set_up_environment(char **argv) {
   if (fsrv.out_fd < 0) { PFATAL("Unable to create '%s'", fsrv.out_file); }
 
   /* Set sane defaults... */
-
-  x = get_afl_env("ASAN_OPTIONS");
-
-  if (x) {
-
-    if (!strstr(x, "abort_on_error=1")) {
-
-      FATAL("Custom ASAN_OPTIONS set without abort_on_error=1 - please fix!");
-
-    }
-
-#ifndef ASAN_BUILD
-    if (!getenv("AFL_DEBUG") && !strstr(x, "symbolize=0")) {
-
-      FATAL("Custom ASAN_OPTIONS set without symbolize=0 - please fix!");
-
-    }
-
-#endif
-
-  }
-
   x = get_afl_env("MSAN_OPTIONS");
 
   if (x) {
@@ -689,69 +667,9 @@ static void set_up_environment(char **argv) {
 
     }
 
-    if (!strstr(x, "symbolize=0")) {
-
-      FATAL("Custom MSAN_OPTIONS set without symbolize=0 - please fix!");
-
-    }
-
   }
 
-  x = get_afl_env("LSAN_OPTIONS");
-
-  if (x) {
-
-    if (!strstr(x, "symbolize=0")) {
-
-      FATAL("Custom LSAN_OPTIONS set without symbolize=0 - please fix!");
-
-    }
-
-  }
-
-  setenv("ASAN_OPTIONS",
-         "abort_on_error=1:"
-         "detect_leaks=0:"
-         "allocator_may_return_null=1:"
-         "detect_odr_violation=0:"
-         "symbolize=0:"
-         "handle_segv=0:"
-         "handle_sigbus=0:"
-         "handle_abort=0:"
-         "handle_sigfpe=0:"
-         "handle_sigill=0",
-         0);
-
-  setenv("UBSAN_OPTIONS",
-         "halt_on_error=1:"
-         "abort_on_error=1:"
-         "malloc_context_size=0:"
-         "allocator_may_return_null=1:"
-         "symbolize=0:"
-         "handle_segv=0:"
-         "handle_sigbus=0:"
-         "handle_abort=0:"
-         "handle_sigfpe=0:"
-         "handle_sigill=0",
-         0);
-
-  setenv("MSAN_OPTIONS", "exit_code=" STRINGIFY(MSAN_ERROR) ":"
-                         "abort_on_error=1:"
-                         "msan_track_origins=0"
-                         "allocator_may_return_null=1:"
-                         "symbolize=0:"
-                         "handle_segv=0:"
-                         "handle_sigbus=0:"
-                         "handle_abort=0:"
-                         "handle_sigfpe=0:"
-                         "handle_sigill=0", 0);
-
-  setenv("LSAN_OPTIONS",
-         "exitcode=" STRINGIFY(LSAN_ERROR) ":"
-         "fast_unwind_on_malloc=0:"
-         "symbolize=0:"
-         "print_suppressions=0",
-         0);
+  set_sanitizer_defaults();
 
   if (get_afl_env("AFL_PRELOAD")) {
 
@@ -862,11 +780,15 @@ static void usage(u8 *argv0) {
       "MSAN_OPTIONS: custom settings for MSAN\n"
       "              (must contain exitcode="STRINGIFY(MSAN_ERROR)" and symbolize=0)\n"
       "AFL_ANALYZE_HEX: print file offsets in hexadecimal instead of decimal\n"
+      "AFL_KILL_SIGNAL: Signal ID delivered to child processes on timeout, etc.\n"
+      "                 (default: SIGKILL)\n"
+      "AFL_FORK_SERVER_KILL_SIGNAL: Kill signal for the fork server on termination\n"
+      "                             (default: SIGTERM). If unset and AFL_KILL_SIGNAL is\n"
+      "                             set, that value will be used.\n"
       "AFL_MAP_SIZE: the shared memory size for that target. must be >= the size\n"
       "              the target was compiled for\n"
       "AFL_PRELOAD: LD_PRELOAD / DYLD_INSERT_LIBRARIES settings for target\n"
       "AFL_SKIP_BIN_CHECK: skip checking the location of and the target\n"
-
       , argv0, EXEC_TIMEOUT, MEM_LIMIT, doc_path);
 
   exit(1);
@@ -1115,8 +1037,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  fsrv.kill_signal =
-      parse_afl_kill_signal_env(getenv("AFL_KILL_SIGNAL"), SIGKILL);
+  configure_afl_kill_signals(
+      &fsrv, NULL, NULL, (fsrv.qemu_mode || unicorn_mode) ? SIGKILL : SIGTERM);
 
   read_initial_file();
   (void)check_binary_signatures(fsrv.target_path);
