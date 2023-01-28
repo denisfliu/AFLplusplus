@@ -180,10 +180,10 @@ static void type_replace(afl_state_t *afl, u8 *buf, u32 len) {
       switch (buf[i]) {
 
         case 'A' ... 'F':
-          c = 'A' + rand_below(afl, 1 + 'F' - 'A');
+          c = 'A' + rand_below(afl, 1 + 'F' - 'A', "afl-fuzz-redqueen 183");
           break;
         case 'a' ... 'f':
-          c = 'a' + rand_below(afl, 1 + 'f' - 'a');
+          c = 'a' + rand_below(afl, 1 + 'f' - 'a', "afl-fuzz-redqueen 186");
           break;
         case '0':
           c = '1';
@@ -192,28 +192,28 @@ static void type_replace(afl_state_t *afl, u8 *buf, u32 len) {
           c = '0';
           break;
         case '2' ... '9':
-          c = '2' + rand_below(afl, 1 + '9' - '2');
+          c = '2' + rand_below(afl, 1 + '9' - '2', "afl-fuzz-redqueen 195");
           break;
         case 'G' ... 'Z':
-          c = 'G' + rand_below(afl, 1 + 'Z' - 'G');
+          c = 'G' + rand_below(afl, 1 + 'Z' - 'G', "afl-fuzz-redqueen 198");
           break;
         case 'g' ... 'z':
-          c = 'g' + rand_below(afl, 1 + 'z' - 'g');
+          c = 'g' + rand_below(afl, 1 + 'z' - 'g', "afl-fuzz-redqueen 201");
           break;
         case '!' ... '*':
-          c = '!' + rand_below(afl, 1 + '*' - '!');
+          c = '!' + rand_below(afl, 1 + '*' - '!', "afl-fuzz-redqueen 204");
           break;
         case ',' ... '.':
-          c = ',' + rand_below(afl, 1 + '.' - ',');
+          c = ',' + rand_below(afl, 1 + '.' - ',', "afl-fuzz-redqueen 207");
           break;
         case ':' ... '@':
-          c = ':' + rand_below(afl, 1 + '@' - ':');
+          c = ':' + rand_below(afl, 1 + '@' - ':', "afl-fuzz-redqueen 210");
           break;
         case '[' ... '`':
-          c = '[' + rand_below(afl, 1 + '`' - '[');
+          c = '[' + rand_below(afl, 1 + '`' - '[', "afl-fuzz-redqueen 213");
           break;
         case '{' ... '~':
-          c = '{' + rand_below(afl, 1 + '~' - '{');
+          c = '{' + rand_below(afl, 1 + '~' - '{', "afl-fuzz-redqueen 216");
           break;
         case '+':
           c = '/';
@@ -272,7 +272,7 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
   u8             *changed = ck_alloc_nozero(len);
 
 #if defined(_DEBUG) || defined(CMPLOG_INTROSPECTION)
-  u64 start_time = get_cur_time();
+  u64 start_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 275");
 #endif
 
   u64 orig_hit_cnt, new_hit_cnt, exec_cksum;
@@ -303,14 +303,14 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
     memcpy(buf + rng->start, changed + rng->start, s);
 
     u64 cksum = 0;
-    u64 start_us = get_cur_time_us();
+    u64 start_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
     if (unlikely(get_exec_checksum(afl, buf, len, &cksum))) {
 
       goto checksum_fail;
 
     }
 
-    u64 stop_us = get_cur_time_us();
+    u64 stop_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
 
     /* Discard if the mutations change the path or if it is too decremental
       in speed - how could the same path have a much different speed
@@ -445,7 +445,7 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
         f,
         "Colorization: fname=%s len=%u ms=%llu result=%u execs=%u found=%llu "
         "taint=%u ascii=%u auto_extra_before=%u\n",
-        afl->queue_cur->fname, len, get_cur_time() - start_time,
+        afl->queue_cur->fname, len, get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 448") - start_time,
         afl->queue_cur->colorized, afl->stage_cur, new_hit_cnt - orig_hit_cnt,
         positions, afl->queue_cur->is_ascii ? 1 : 0, afl->a_extras_cnt);
 
@@ -2665,7 +2665,7 @@ u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len) {
   }
 
 #if defined(_DEBUG) || defined(CMPLOG_INTROSPECTION)
-  u64 start_time = get_cur_time();
+  u64 start_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 2668");
   u32 cmp_locations = 0;
 #endif
 
@@ -2919,7 +2919,7 @@ exit_its:
     fprintf(f,
             "Cmplog: fname=%s len=%u ms=%llu result=%u finds=%llu entries=%u "
             "auto_extra_after=%u\n",
-            afl->queue_cur->fname, len, get_cur_time() - start_time, r,
+            afl->queue_cur->fname, len, get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 2922") - start_time, r,
             new_hit_cnt - orig_hit_cnt, cmp_locations, afl->a_extras_cnt);
 
   #ifndef _DEBUG

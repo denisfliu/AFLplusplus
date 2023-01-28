@@ -73,9 +73,9 @@ extern afl_state_t *     afl_struct;
 inline void wmb() { }
 inline void LOG_F(const char *format, ...) { }
 static inline uint64_t util_rndGet(uint64_t min, uint64_t max) {
-  return min + rand_below(afl_struct, max - min + 1);
+  return min + rand_below(afl_struct, max - min + 1, "init.h 76");
 }
-static inline uint64_t util_rnd64() { return rand_below(afl_struct, 1 << 30); }
+static inline uint64_t util_rnd64() { return rand_below(afl_struct, 1 << 30, "init.h 78"); }
 
 static inline const uint8_t* input_getRandomInputAsBuf(run_t* run, size_t* len) {
   *len = queue_input_size;
@@ -93,10 +93,10 @@ static inline void util_turnToPrintable(uint8_t* buf, size_t sz) {
 static inline void util_rndBuf(uint8_t* buf, size_t sz) {
   if (sz == 0) return;
   for (size_t i = 0; i < sz; i++)
-    buf[i] = (uint8_t)rand_below(afl_struct, 256);
+    buf[i] = (uint8_t)rand_below(afl_struct, 256, "init.h 96");
 }
 static inline uint8_t util_rndPrintable() {
-  return 32 + rand_below(afl_struct, 127 - 32);
+  return 32 + rand_below(afl_struct, 127 - 32, "init.h 99");
 }
 static inline void util_rndBufPrintable(uint8_t* buf, size_t sz) {
   for (size_t i = 0; i < sz; i++)

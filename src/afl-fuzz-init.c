@@ -459,7 +459,7 @@ static void shuffle_ptrs(afl_state_t *afl, void **ptrs, u32 cnt) {
 
   for (i = 0; i < cnt - 2; ++i) {
 
-    u32   j = i + rand_below(afl, cnt - i);
+    u32   j = i + rand_below(afl, cnt - i, "afl-fuzz-init 462");
     void *s = ptrs[i];
     ptrs[i] = ptrs[j];
     ptrs[j] = s;
@@ -2036,6 +2036,22 @@ void setup_dirs_fds(afl_state_t *afl) {
 
   afl->fsrv.dev_urandom_fd = open("/dev/urandom", O_RDONLY);
   if (afl->fsrv.dev_urandom_fd < 0) { PFATAL("Unable to open /dev/urandom"); }
+
+  tmp = alloc_printf("%s/replay", afl->out_dir);
+  if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/replay/time.bin", afl->out_dir);
+  afl->fsrv.time_fd[0] = open(tmp, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU);
+  if (afl->fsrv.time_fd[0] < 0) { PFATAL("Unable to open time write"); }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/replay/rand_below.bin", afl->out_dir);
+  afl->fsrv.rand_below_fd[0] = open(tmp, O_WRONLY | O_CREAT | O_APPEND, S_IRWXU);
+  if (afl->fsrv.rand_below_fd[0] < 0) { PFATAL("Unable to open rand below write"); }
+
+  ck_write(afl->fsrv.rand_below_fd[0], &afl->rand_seed, sizeof(afl->rand_seed), tmp);
+  ck_free(tmp);
 
   /* Gnuplot output file. */
 

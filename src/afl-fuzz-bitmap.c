@@ -292,6 +292,20 @@ void minimize_bits(afl_state_t *afl, u8 *dst, u8 *src) {
 
 u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len) {
 
+  #ifdef INTROSPECTION
+    u8 fn1[PATH_MAX];
+    snprintf(fn1, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f1 = fopen(fn1, "a");
+    if (f1) {
+
+        fprintf( f1, "describe_op");
+
+      fprintf(f1, "\n");
+      fclose(f1);
+
+    }
+  #endif
+
   u8 is_timeout = 0;
 
   if (new_bits & 0xf0) {
@@ -455,6 +469,19 @@ void write_crash_readme(afl_state_t *afl) {
 u8 __attribute__((hot))
 save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
+  #ifdef INTROSPECTION
+    u8 fn1[PATH_MAX];
+    snprintf(fn1, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f1 = fopen(fn1, "a");
+    if (f1) {
+
+        fprintf( f1, "save_if_interesting | fault: %u | len: %u | afl->crash_mode: %u", fault, len, afl->crash_mode);
+
+      fprintf(f1, "\n");
+      fclose(f1);
+
+    }
+  #endif
   if (unlikely(len == 0)) { return 0; }
 
   u8  fn[PATH_MAX];
@@ -594,7 +621,20 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       ++afl->total_tmouts;
 
-      if (afl->saved_hangs >= KEEP_UNIQUE_HANG) { return keeping; }
+      if (afl->saved_hangs >= KEEP_UNIQUE_HANG) { 
+  #ifdef INTROSPECTION
+    snprintf(fn1, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    f1 = fopen(fn1, "a");
+    if (f1) {
+
+        fprintf( f1, " saved_hangs >= | %llu", afl->saved_hangs);
+      fprintf(f1, "\n");
+      fclose(f1);
+
+    }
+  #endif
+        return keeping; 
+      }
 
       if (likely(!afl->non_instrumented_mode)) {
 
@@ -607,7 +647,20 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
         simplify_trace(afl, afl->fsrv.trace_bits);
 
-        if (!has_new_bits(afl, afl->virgin_tmout)) { return keeping; }
+        if (!has_new_bits(afl, afl->virgin_tmout)) { 
+  #ifdef INTROSPECTION
+    snprintf(fn1, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    f1 = fopen(fn1, "a");
+    if (f1) {
+
+        fprintf( f1, " has_new_bits");
+      fprintf(f1, "\n");
+      fclose(f1);
+
+    }
+  #endif
+          return keeping; 
+        }
 
       }
 
@@ -705,7 +758,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       ++afl->saved_hangs;
 
-      afl->last_hang_time = get_cur_time();
+      afl->last_hang_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 721");
 
       break;
 
@@ -794,7 +847,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       }
 
-      afl->last_crash_time = get_cur_time();
+      afl->last_crash_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 810");
       afl->last_crash_execs = afl->fsrv.total_execs;
 
       break;

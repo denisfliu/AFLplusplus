@@ -855,6 +855,35 @@ u64 get_cur_time(void) {
 
 }
 
+/* Get unix time in milliseconds and record */
+
+u64 get_cur_or_replay_time(s32 time_fd[2], int replay, u8 *fname, u8 *origin) {
+
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", fname);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "get_cur_time origin: %s", origin);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
+  u64 time;
+  if (unlikely(replay)) {
+    ck_read(time_fd[1], &time, sizeof(time), "time_replay_get_cur_time");
+  } else {
+    time = get_cur_time();
+  }
+
+  ck_write(time_fd[0], &time, sizeof(time), "time_replay_get_cur_time");
+  return time;
+
+}
+
 /* Get unix time in microseconds */
 
 u64 get_cur_time_us(void) {
@@ -865,6 +894,22 @@ u64 get_cur_time_us(void) {
   gettimeofday(&tv, &tz);
 
   return (tv.tv_sec * 1000000ULL) + tv.tv_usec;
+
+}
+
+/* Get unix time in microseconds */
+
+u64 get_cur_or_replay_time_us(s32 time_fd[2], int replay) {
+
+  u64 time;
+  if (unlikely(replay)) {
+    ck_read(time_fd[1], &time, sizeof(time), "time_replay_get_cur_time_us");
+  } else {
+    time = get_cur_time_us();
+  }
+
+  ck_write(time_fd[0], &time, sizeof(time), "time_replay_get_cur_time_us");
+  return time;
 
 }
 

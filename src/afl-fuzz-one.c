@@ -36,7 +36,7 @@ static int select_algorithm(afl_state_t *afl, u32 max_algorithm) {
 
   double range_sele =
       (double)afl->probability_now[afl->swarm_now][operator_number - 1];
-  double sele = ((double)(rand_below(afl, 10000) * 0.0001 * range_sele));
+  double sele = ((double)(rand_below(afl, 10000, "afl-fuzz-one.c 39") * 0.0001 * range_sele));
 
   for (i_puppet = 0; i_puppet < operator_num; ++i_puppet) {
 
@@ -80,7 +80,7 @@ static inline u32 choose_block_len(afl_state_t *afl, u32 limit) {
 
   if (unlikely(!afl->run_over10m)) { rlim = 1; }
 
-  switch (rand_below(afl, rlim)) {
+  switch (rand_below(afl, rlim, "afl-fuzz-one 83")) {
 
     case 0:
       min_value = 1;
@@ -94,7 +94,7 @@ static inline u32 choose_block_len(afl_state_t *afl, u32 limit) {
 
     default:
 
-      if (likely(rand_below(afl, 10))) {
+      if (likely(rand_below(afl, 10, "afl-fuzz-one 97"))) {
 
         min_value = HAVOC_BLK_MEDIUM;
         max_value = HAVOC_BLK_LARGE;
@@ -110,7 +110,7 @@ static inline u32 choose_block_len(afl_state_t *afl, u32 limit) {
 
   if (min_value >= limit) { min_value = 1; }
 
-  return min_value + rand_below(afl, MIN(max_value, limit) - min_value + 1);
+  return min_value + rand_below(afl, MIN(max_value, limit) - min_value + 1, "afl-fuzz-one 113");
 
 }
 
@@ -414,7 +414,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
        cases. */
 
     if ((afl->queue_cur->fuzz_level || !afl->queue_cur->favored) &&
-        likely(rand_below(afl, 100) < SKIP_TO_NEW_PROB)) {
+        likely(rand_below(afl, 100, "afl-fuzz-one 417") < SKIP_TO_NEW_PROB)) {
 
       return 1;
 
@@ -430,11 +430,11 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     if (afl->queue_cycle > 1 && !afl->queue_cur->fuzz_level) {
 
-      if (likely(rand_below(afl, 100) < SKIP_NFAV_NEW_PROB)) { return 1; }
+      if (likely(rand_below(afl, 100, "afl-fuzz-one 433") < SKIP_NFAV_NEW_PROB)) { return 1; }
 
     } else {
 
-      if (likely(rand_below(afl, 100) < SKIP_NFAV_OLD_PROB)) { return 1; }
+      if (likely(rand_below(afl, 100, "afl-fuzz-one 437") < SKIP_NFAV_OLD_PROB)) { return 1; }
 
     }
 
@@ -565,7 +565,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
           (afl->cmplog_lvl == 2 && afl->queue_cur->tc_ref) ||
           afl->queue_cur->favored ||
           !(afl->fsrv.total_execs % afl->queued_items) ||
-          get_cur_time() - afl->last_find_time > 300000) {  // 300 seconds
+          get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 568") - afl->last_find_time > 300000) {  // 300 seconds
 
         if (input_to_state_stage(afl, in_buf, out_buf, len)) {
 
@@ -1638,7 +1638,7 @@ skip_interest:
          map. */
 
       if ((afl->extras_cnt > afl->max_det_extras &&
-           rand_below(afl, afl->extras_cnt) >= afl->max_det_extras) ||
+           rand_below(afl, afl->extras_cnt, "afl-fuzz-one 1641") >= afl->max_det_extras) ||
           afl->extras[j].len > len - i ||
           !memcmp(afl->extras[j].data, out_buf + i, afl->extras[j].len) ||
           !memchr(eff_map + EFF_APOS(i), 1,
@@ -1912,7 +1912,7 @@ custom_mutator_stage:
 
             do {
 
-              tid = rand_below(afl, afl->queued_items);
+              tid = rand_below(afl, afl->queued_items, "afl-fuzz-one 1915");
 
             } while (unlikely(tid == afl->current_entry ||
 
@@ -2077,22 +2077,50 @@ havoc_stage:
     /* add expensive havoc cases here, they are activated after a full
        cycle without finds happened */
 
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "r_max incremented: 1");
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
     r_max += 4;
 
   }
 
-  if (unlikely(get_cur_time() - afl->last_find_time > 5000 /* 5 seconds */ &&
+  u64 tempTime = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 2097");
+  if (unlikely(tempTime - afl->last_find_time > 5000 /* 5 seconds */ &&
                afl->ready_for_splicing_count > 1)) {
 
     /* add expensive havoc cases here if there is no findings in the last 5s */
 
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "r_max incremented: 2 | last_find_time: %llu | get_time: %llu | ready_splice: %u",
+                afl->last_find_time, tempTime, afl->ready_for_splicing_count);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
     r_max += 4;
 
   }
 
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
-    u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
+    u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2, "afl-fuzz-one 2095"));
 
     afl->stage_cur_val = use_stacking;
 
@@ -2108,7 +2136,7 @@ havoc_stage:
         LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
 
           if (el->stacked_custom &&
-              rand_below(afl, 100) < el->stacked_custom_prob) {
+              rand_below(afl, 100, "afl-fuzz-one 2111") < el->stacked_custom_prob) {
 
             u8    *custom_havoc_buf = NULL;
             size_t new_len = el->afl_custom_havoc_mutation(
@@ -2138,7 +2166,7 @@ havoc_stage:
 
       }
 
-      switch ((r = rand_below(afl, r_max))) {
+      switch ((r = rand_below(afl, r_max, "afl-fuzz-one 2141"))) {
 
         case 0 ... 3: {
 
@@ -2148,7 +2176,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP_BIT1");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          FLIP_BIT(out_buf, rand_below(afl, temp_len << 3));
+          FLIP_BIT(out_buf, rand_below(afl, temp_len << 3, "afl-fuzz-one 2151"));
           break;
 
         }
@@ -2161,8 +2189,8 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING8");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] =
-              interesting_8[rand_below(afl, sizeof(interesting_8))];
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2164")] =
+              interesting_8[rand_below(afl, sizeof(interesting_8), "afl-fuzz-one 2165")];
           break;
 
         }
@@ -2177,8 +2205,8 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING16");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
-              interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)];
+          *(u16 *)(out_buf + rand_below(afl, temp_len - 1, "afl-fuzz-one 2180")) =
+              interesting_16[rand_below(afl, sizeof(interesting_16) >> 1, "afl-fuzz-one 2181")];
 
           break;
 
@@ -2194,8 +2222,8 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING16BE");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) = SWAP16(
-              interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)]);
+          *(u16 *)(out_buf + rand_below(afl, temp_len - 1, "afl-fuzz-one 2197")) = SWAP16(
+              interesting_16[rand_below(afl, sizeof(interesting_16) >> 1, "afl-fuzz-one 2198")]);
 
           break;
 
@@ -2211,8 +2239,8 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
-              interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)];
+          *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 2214")) =
+              interesting_32[rand_below(afl, sizeof(interesting_32) >> 2, "afl-fuzz-one 2215")];
 
           break;
 
@@ -2228,8 +2256,8 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32BE");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) = SWAP32(
-              interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)]);
+          *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 2231")) = SWAP32(
+              interesting_32[rand_below(afl, sizeof(interesting_32) >> 2, "afl-fuzz-one 2232")]);
 
           break;
 
@@ -2243,7 +2271,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH8_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] -= 1 + rand_below(afl, ARITH_MAX);
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2246")] -= 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2246_");
           break;
 
         }
@@ -2256,7 +2284,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH8+");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] += 1 + rand_below(afl, ARITH_MAX);
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2259")] += 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2259_");
           break;
 
         }
@@ -2267,13 +2295,13 @@ havoc_stage:
 
           if (temp_len < 2) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 1);
+          u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 2270");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16_-%u", pos);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+          *(u16 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2276");
 
           break;
 
@@ -2285,8 +2313,8 @@ havoc_stage:
 
           if (temp_len < 2) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 1);
-          u16 num = 1 + rand_below(afl, ARITH_MAX);
+          u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 2288");
+          u16 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2289");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16_BE-%u_%u", pos,
@@ -2306,13 +2334,13 @@ havoc_stage:
 
           if (temp_len < 2) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 1);
+          u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 2309");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16+-%u", pos);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u16 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+          *(u16 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2315");
 
           break;
 
@@ -2324,8 +2352,8 @@ havoc_stage:
 
           if (temp_len < 2) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 1);
-          u16 num = 1 + rand_below(afl, ARITH_MAX);
+          u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 2327");
+          u16 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2328");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16+BE-%u_%u", pos,
@@ -2345,13 +2373,13 @@ havoc_stage:
 
           if (temp_len < 4) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 3);
+          u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 2348");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32_-%u", pos);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+          *(u32 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2354");
 
           break;
 
@@ -2363,8 +2391,8 @@ havoc_stage:
 
           if (temp_len < 4) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 3);
-          u32 num = 1 + rand_below(afl, ARITH_MAX);
+          u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 2366");
+          u32 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2367");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32_BE-%u-%u", pos,
@@ -2384,13 +2412,13 @@ havoc_stage:
 
           if (temp_len < 4) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 3);
+          u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 2387");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32+-%u", pos);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+          *(u32 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2393");
 
           break;
 
@@ -2402,8 +2430,8 @@ havoc_stage:
 
           if (temp_len < 4) { break; }
 
-          u32 pos = rand_below(afl, temp_len - 3);
-          u32 num = 1 + rand_below(afl, ARITH_MAX);
+          u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 2405");
+          u32 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 2406");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32+BE-%u-%u", pos,
@@ -2427,7 +2455,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " RAND8");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] ^= 1 + rand_below(afl, 255);
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2430")] ^= 1 + rand_below(afl, 255, "afl-fuzz-one 2430_");
           break;
 
         }
@@ -2439,8 +2467,8 @@ havoc_stage:
             /* Clone bytes. */
 
             u32 clone_len = choose_block_len(afl, temp_len);
-            u32 clone_from = rand_below(afl, temp_len - clone_len + 1);
-            u32 clone_to = rand_below(afl, temp_len);
+            u32 clone_from = rand_below(afl, temp_len - clone_len + 1, "afl-fuzz-one 2442");
+            u32 clone_to = rand_below(afl, temp_len, "afl-fuzz-one 2443");
 
 #ifdef INTROSPECTION
             snprintf(afl->m_tmp, sizeof(afl->m_tmp), " CLONE-%s-%u-%u-%u",
@@ -2480,7 +2508,7 @@ havoc_stage:
             /* Insert a block of constant bytes (25%). */
 
             u32 clone_len = choose_block_len(afl, HAVOC_BLK_XL);
-            u32 clone_to = rand_below(afl, temp_len);
+            u32 clone_to = rand_below(afl, temp_len, "afl-fuzz-one 2483");
 
 #ifdef INTROSPECTION
             snprintf(afl->m_tmp, sizeof(afl->m_tmp), " CLONE-%s-%u-%u",
@@ -2498,8 +2526,8 @@ havoc_stage:
             /* Inserted part */
 
             memset(new_buf + clone_to,
-                   rand_below(afl, 2) ? rand_below(afl, 256)
-                                      : out_buf[rand_below(afl, temp_len)],
+                   rand_below(afl, 2, "afl-fuzz-one 2501") ? rand_below(afl, 256, "afl-fuzz-one 2502")
+                                      : out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2502")],
                    clone_len);
 
             /* Tail */
@@ -2523,8 +2551,8 @@ havoc_stage:
           if (temp_len < 2) { break; }
 
           u32 copy_len = choose_block_len(afl, temp_len - 1);
-          u32 copy_from = rand_below(afl, temp_len - copy_len + 1);
-          u32 copy_to = rand_below(afl, temp_len - copy_len + 1);
+          u32 copy_from = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 2526");
+          u32 copy_to = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 2527");
 
           if (likely(copy_from != copy_to)) {
 
@@ -2548,7 +2576,7 @@ havoc_stage:
           if (temp_len < 2) { break; }
 
           u32 copy_len = choose_block_len(afl, temp_len - 1);
-          u32 copy_to = rand_below(afl, temp_len - copy_len + 1);
+          u32 copy_to = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 2551");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " OVERWRITE_FIXED-%u-%u",
@@ -2556,8 +2584,8 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
           memset(out_buf + copy_to,
-                 rand_below(afl, 2) ? rand_below(afl, 256)
-                                    : out_buf[rand_below(afl, temp_len)],
+                 rand_below(afl, 2, "afl-fuzz-one 2559") ? rand_below(afl, 256, "afl-fuzz-one 2559_")
+                                    : out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2560")],
                  copy_len);
 
           break;
@@ -2572,7 +2600,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ADDBYTE_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)]++;
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2575")]++;
           break;
 
         }
@@ -2585,7 +2613,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " SUBBYTE_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)]--;
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2588")]--;
           break;
 
         }
@@ -2598,7 +2626,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP8_");
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          out_buf[rand_below(afl, temp_len)] ^= 0xff;
+          out_buf[rand_below(afl, temp_len, "afl-fuzz-one 2601")] ^= 0xff;
           break;
 
         }
@@ -2610,10 +2638,10 @@ havoc_stage:
           /* Switch bytes. */
 
           u32 to_end, switch_to, switch_len, switch_from;
-          switch_from = rand_below(afl, temp_len);
+          switch_from = rand_below(afl, temp_len, "afl-fuzz-one 2613");
           do {
 
-            switch_to = rand_below(afl, temp_len);
+            switch_to = rand_below(afl, temp_len, "afl-fuzz-one 2616");
 
           } while (switch_from == switch_to);
 
@@ -2665,7 +2693,7 @@ havoc_stage:
           /* Don't delete too much. */
 
           u32 del_len = choose_block_len(afl, temp_len - 1);
-          u32 del_from = rand_below(afl, temp_len - del_len + 1);
+          u32 del_from = rand_below(afl, temp_len - del_len + 1, "afl-fuzz-one 2668");
 
 #ifdef INTROSPECTION
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " DEL-%u-%u", del_from,
@@ -2691,12 +2719,12 @@ havoc_stage:
 
               /* Use the dictionary. */
 
-              u32 use_extra = rand_below(afl, afl->extras_cnt);
+              u32 use_extra = rand_below(afl, afl->extras_cnt, "afl-fuzz-one 2694");
               u32 extra_len = afl->extras[use_extra].len;
 
               if (extra_len > temp_len) { break; }
 
-              u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
+              u32 insert_at = rand_below(afl, temp_len - extra_len + 1, "afl-fuzz-one 2699");
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " EXTRA_OVERWRITE-%u-%u",
                        insert_at, extra_len);
@@ -2709,12 +2737,12 @@ havoc_stage:
 
             } else if (r < 4) {
 
-              u32 use_extra = rand_below(afl, afl->extras_cnt);
+              u32 use_extra = rand_below(afl, afl->extras_cnt, "afl-fuzz-one 2712");
               u32 extra_len = afl->extras[use_extra].len;
               if (temp_len + extra_len >= MAX_FILE) { break; }
 
               u8 *ptr = afl->extras[use_extra].data;
-              u32 insert_at = rand_below(afl, temp_len + 1);
+              u32 insert_at = rand_below(afl, temp_len + 1, "afl-fuzz-one 2717");
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " EXTRA_INSERT-%u-%u",
                        insert_at, extra_len);
@@ -2756,12 +2784,12 @@ havoc_stage:
 
               /* Use the dictionary. */
 
-              u32 use_extra = rand_below(afl, afl->a_extras_cnt);
+              u32 use_extra = rand_below(afl, afl->a_extras_cnt, "afl-fuzz-one 2759");
               u32 extra_len = afl->a_extras[use_extra].len;
 
               if (extra_len > temp_len) { break; }
 
-              u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
+              u32 insert_at = rand_below(afl, temp_len - extra_len + 1, "afl-fuzz-one 2764");
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp),
                        " AUTO_EXTRA_OVERWRITE-%u-%u", insert_at, extra_len);
@@ -2774,12 +2802,12 @@ havoc_stage:
 
             } else if (r < (r_cmp << 1)) {
 
-              u32 use_extra = rand_below(afl, afl->a_extras_cnt);
+              u32 use_extra = rand_below(afl, afl->a_extras_cnt, "afl-fuzz-one 2777");
               u32 extra_len = afl->a_extras[use_extra].len;
               if (temp_len + extra_len >= MAX_FILE) { break; }
 
               u8 *ptr = afl->a_extras[use_extra].data;
-              u32 insert_at = rand_below(afl, temp_len + 1);
+              u32 insert_at = rand_below(afl, temp_len + 1, "afl-fuzz-one 2782");
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp),
                        " AUTO_EXTRA_INSERT-%u-%u", insert_at, extra_len);
@@ -2816,7 +2844,7 @@ havoc_stage:
           u32 tid;
           do {
 
-            tid = rand_below(afl, afl->queued_items);
+            tid = rand_below(afl, afl->queued_items, "afl-fuzz-one 2819");
 
           } while (tid == afl->current_entry || afl->queue_buf[tid]->len < 4);
 
@@ -2834,8 +2862,8 @@ havoc_stage:
             copy_len = choose_block_len(afl, new_len - 1);
             if (copy_len > temp_len) copy_len = temp_len;
 
-            copy_from = rand_below(afl, new_len - copy_len + 1);
-            copy_to = rand_below(afl, temp_len - copy_len + 1);
+            copy_from = rand_below(afl, new_len - copy_len + 1, "afl-fuzz-one 2837");
+            copy_to = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 2838");
 
 #ifdef INTROSPECTION
             snprintf(afl->m_tmp, sizeof(afl->m_tmp),
@@ -2852,8 +2880,8 @@ havoc_stage:
             u32 clone_from, clone_to, clone_len;
 
             clone_len = choose_block_len(afl, new_len);
-            clone_from = rand_below(afl, new_len - clone_len + 1);
-            clone_to = rand_below(afl, temp_len + 1);
+            clone_from = rand_below(afl, new_len - clone_len + 1, "afl-fuzz-one 2855");
+            clone_to = rand_below(afl, temp_len + 1, "afl-fuzz-one 2856");
 
             u8 *temp_buf = afl_realloc(AFL_BUF_PARAM(out_scratch),
                                        temp_len + clone_len + 1);
@@ -2968,7 +2996,7 @@ retry_splicing:
 
     do {
 
-      tid = rand_below(afl, afl->queued_items);
+      tid = rand_below(afl, afl->queued_items, "afl-fuzz-one 2971");
 
     } while (tid == afl->current_entry || afl->queue_buf[tid]->len < 4);
 
@@ -2987,7 +3015,7 @@ retry_splicing:
 
     /* Split somewhere between the first and last differing byte. */
 
-    split_at = f_diff + rand_below(afl, l_diff - f_diff);
+    split_at = f_diff + rand_below(afl, l_diff - f_diff, "afl-fuzz-one 2990");
 
     /* Do the thing. */
 
@@ -3030,6 +3058,19 @@ abandon_entry:
 
   ++afl->queue_cur->fuzz_level;
   orig_in = NULL;
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/fuzz-one-original.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "ret_val: %u", ret_val);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
   return ret_val;
 
 #undef FLIP_BIT
@@ -3079,7 +3120,7 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
        cases. */
 
     if ((afl->queue_cur->fuzz_level || !afl->queue_cur->favored) &&
-        rand_below(afl, 100) < SKIP_TO_NEW_PROB) {
+        rand_below(afl, 100, "afl-fuzz-one 3082") < SKIP_TO_NEW_PROB) {
 
       return 1;
 
@@ -3095,11 +3136,11 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
 
     if (afl->queue_cycle > 1 && !afl->queue_cur->fuzz_level) {
 
-      if (likely(rand_below(afl, 100) < SKIP_NFAV_NEW_PROB)) { return 1; }
+      if (likely(rand_below(afl, 100, "afl-fuzz-one 3098") < SKIP_NFAV_NEW_PROB)) { return 1; }
 
     } else {
 
-      if (likely(rand_below(afl, 100) < SKIP_NFAV_OLD_PROB)) { return 1; }
+      if (likely(rand_below(afl, 100, "afl-fuzz-one 3102") < SKIP_NFAV_OLD_PROB)) { return 1; }
 
     }
 
@@ -3224,7 +3265,7 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
       if (afl->cmplog_lvl == 3 ||
           (afl->cmplog_lvl == 2 && afl->queue_cur->tc_ref) ||
           !(afl->fsrv.total_execs % afl->queued_items) ||
-          get_cur_time() - afl->last_find_time > 300000) {  // 300 seconds
+          get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 3268") - afl->last_find_time > 300000) {  // 300 seconds
 
         if (input_to_state_stage(afl, in_buf, out_buf, len)) {
 
@@ -3240,7 +3281,7 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
 
   /* Go to pacemker fuzzing if MOpt is doing well */
 
-  cur_ms_lv = get_cur_time();
+  cur_ms_lv = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 3284");
   if (!(afl->key_puppet == 0 &&
         ((cur_ms_lv - afl->last_find_time < (u32)afl->limit_time_puppet) ||
          (afl->last_crash_time != 0 &&
@@ -4286,7 +4327,7 @@ skip_interest:
          map. */
 
       if ((afl->extras_cnt > afl->max_det_extras &&
-           rand_below(afl, afl->extras_cnt) >= afl->max_det_extras) ||
+           rand_below(afl, afl->extras_cnt, "afl-fuzz-one 4289") >= afl->max_det_extras) ||
           afl->extras[j].len > len - i ||
           !memcmp(afl->extras[j].data, out_buf + i, afl->extras[j].len) ||
           !memchr(eff_map + EFF_APOS(i), 1,
@@ -4541,10 +4582,10 @@ pacemaker_fuzzing:
       if (unlikely(afl->orig_hit_cnt_puppet == 0)) {
 
         afl->orig_hit_cnt_puppet = afl->queued_items + afl->saved_crashes;
-        afl->last_limit_time_start = get_cur_time();
+        afl->last_limit_time_start = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 4585");
         afl->SPLICE_CYCLES_puppet =
             (rand_below(
-                 afl, SPLICE_CYCLES_puppet_up - SPLICE_CYCLES_puppet_low + 1) +
+                 afl, SPLICE_CYCLES_puppet_up - SPLICE_CYCLES_puppet_low + 1, "afl-fuzz-one 4547") +
              SPLICE_CYCLES_puppet_low);
 
       }
@@ -4605,7 +4646,7 @@ pacemaker_fuzzing:
       for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max;
            ++afl->stage_cur) {
 
-        u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
+        u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2, "afl-fuzz-one 4608"));
 
         afl->stage_cur_val = use_stacking;
 
@@ -4626,7 +4667,7 @@ pacemaker_fuzzing:
 
             case 0:
               /* Flip a single bit somewhere. Spooky! */
-              FLIP_BIT(out_buf, rand_below(afl, temp_len << 3));
+              FLIP_BIT(out_buf, rand_below(afl, temp_len << 3, "afl-fuzz-one 4629"));
               MOpt_globals.cycles_v2[STAGE_FLIP1]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP_BIT1");
@@ -4636,7 +4677,7 @@ pacemaker_fuzzing:
 
             case 1:
               if (temp_len < 2) { break; }
-              temp_len_puppet = rand_below(afl, (temp_len << 3) - 1);
+              temp_len_puppet = rand_below(afl, (temp_len << 3) - 1, "afl-fuzz-one 4639");
               FLIP_BIT(out_buf, temp_len_puppet);
               FLIP_BIT(out_buf, temp_len_puppet + 1);
               MOpt_globals.cycles_v2[STAGE_FLIP2]++;
@@ -4648,7 +4689,7 @@ pacemaker_fuzzing:
 
             case 2:
               if (temp_len < 2) { break; }
-              temp_len_puppet = rand_below(afl, (temp_len << 3) - 3);
+              temp_len_puppet = rand_below(afl, (temp_len << 3) - 3, "afl-fuzz-one 4651");
               FLIP_BIT(out_buf, temp_len_puppet);
               FLIP_BIT(out_buf, temp_len_puppet + 1);
               FLIP_BIT(out_buf, temp_len_puppet + 2);
@@ -4662,7 +4703,7 @@ pacemaker_fuzzing:
 
             case 3:
               if (temp_len < 4) { break; }
-              out_buf[rand_below(afl, temp_len)] ^= 0xFF;
+              out_buf[rand_below(afl, temp_len, "afl-fuzz-one 4665")] ^= 0xFF;
               MOpt_globals.cycles_v2[STAGE_FLIP8]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP_BIT8");
@@ -4672,7 +4713,7 @@ pacemaker_fuzzing:
 
             case 4:
               if (temp_len < 8) { break; }
-              *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) ^= 0xFFFF;
+              *(u16 *)(out_buf + rand_below(afl, temp_len - 1, "afl-fuzz-one 4675")) ^= 0xFFFF;
               MOpt_globals.cycles_v2[STAGE_FLIP16]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP_BIT16");
@@ -4682,7 +4723,7 @@ pacemaker_fuzzing:
 
             case 5:
               if (temp_len < 8) { break; }
-              *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) ^= 0xFFFFFFFF;
+              *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 4685")) ^= 0xFFFFFFFF;
               MOpt_globals.cycles_v2[STAGE_FLIP32]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " FLIP_BIT32");
@@ -4691,10 +4732,10 @@ pacemaker_fuzzing:
               break;
 
             case 6:
-              out_buf[rand_below(afl, temp_len)] -=
-                  1 + rand_below(afl, ARITH_MAX);
-              out_buf[rand_below(afl, temp_len)] +=
-                  1 + rand_below(afl, ARITH_MAX);
+              out_buf[rand_below(afl, temp_len, "afl-fuzz-one 4694")] -=
+                  1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4695");
+              out_buf[rand_below(afl, temp_len, "afl-fuzz-one 4696")] +=
+                  1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4697");
               MOpt_globals.cycles_v2[STAGE_ARITH8]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH8");
@@ -4705,10 +4746,10 @@ pacemaker_fuzzing:
             case 7:
               /* Randomly subtract from word, random endian. */
               if (temp_len < 8) { break; }
-              if (rand_below(afl, 2)) {
+              if (rand_below(afl, 2, "afl-fuzz-one 4708")) {
 
-                u32 pos = rand_below(afl, temp_len - 1);
-                *(u16 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+                u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 4710");
+                *(u16 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4711");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16-%u", pos);
                 strcat(afl->mutation, afl->m_tmp);
@@ -4716,8 +4757,8 @@ pacemaker_fuzzing:
 
               } else {
 
-                u32 pos = rand_below(afl, temp_len - 1);
-                u16 num = 1 + rand_below(afl, ARITH_MAX);
+                u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 4719");
+                u16 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4720");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16BE-%u-%u",
                          pos, num);
@@ -4729,19 +4770,19 @@ pacemaker_fuzzing:
               }
 
               /* Randomly add to word, random endian. */
-              if (rand_below(afl, 2)) {
+              if (rand_below(afl, 2, "afl-fuzz-one 4732")) {
 
-                u32 pos = rand_below(afl, temp_len - 1);
+                u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 4734");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16+-%u", pos);
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u16 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+                *(u16 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4739");
 
               } else {
 
-                u32 pos = rand_below(afl, temp_len - 1);
-                u16 num = 1 + rand_below(afl, ARITH_MAX);
+                u32 pos = rand_below(afl, temp_len - 1, "afl-fuzz-one 4743");
+                u16 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4744");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH16BE+-%u-%u",
                          pos, num);
@@ -4758,19 +4799,19 @@ pacemaker_fuzzing:
             case 8:
               /* Randomly subtract from dword, random endian. */
               if (temp_len < 8) { break; }
-              if (rand_below(afl, 2)) {
+              if (rand_below(afl, 2, "afl-fuzz-one 4761")) {
 
-                u32 pos = rand_below(afl, temp_len - 3);
+                u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 4763");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32_-%u", pos);
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u32 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+                *(u32 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4768");
 
               } else {
 
-                u32 pos = rand_below(afl, temp_len - 3);
-                u32 num = 1 + rand_below(afl, ARITH_MAX);
+                u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 4772");
+                u32 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4773");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32BE_-%u-%u",
                          pos, num);
@@ -4783,19 +4824,19 @@ pacemaker_fuzzing:
 
               /* Randomly add to dword, random endian. */
               // if (temp_len < 4) break;
-              if (rand_below(afl, 2)) {
+              if (rand_below(afl, 2, "afl-fuzz-one 4786")) {
 
-                u32 pos = rand_below(afl, temp_len - 3);
+                u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 4788");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32+-%u", pos);
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u32 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+                *(u32 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4793");
 
               } else {
 
-                u32 pos = rand_below(afl, temp_len - 3);
-                u32 num = 1 + rand_below(afl, ARITH_MAX);
+                u32 pos = rand_below(afl, temp_len - 3, "afl-fuzz-one 4797");
+                u32 num = 1 + rand_below(afl, ARITH_MAX, "afl-fuzz-one 4798");
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " ARITH32BE+-%u-%u",
                          pos, num);
@@ -4812,8 +4853,8 @@ pacemaker_fuzzing:
             case 9:
               /* Set byte to interesting value. */
               if (temp_len < 4) { break; }
-              out_buf[rand_below(afl, temp_len)] =
-                  interesting_8[rand_below(afl, sizeof(interesting_8))];
+              out_buf[rand_below(afl, temp_len, "afl-fuzz-one 4815")] =
+                  interesting_8[rand_below(afl, sizeof(interesting_8), "afl-fuzz-one 4816")];
               MOpt_globals.cycles_v2[STAGE_INTEREST8]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING8");
@@ -4824,15 +4865,15 @@ pacemaker_fuzzing:
             case 10:
               /* Set word to interesting value, randomly choosing endian. */
               if (temp_len < 8) { break; }
-              if (rand_below(afl, 2)) {
+              if (rand_below(afl, 2, "afl-fuzz-one 4827")) {
 
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING16");
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
+                *(u16 *)(out_buf + rand_below(afl, temp_len - 1, "afl-fuzz-one 4833")) =
                     interesting_16[rand_below(afl,
-                                              sizeof(interesting_16) >> 1)];
+                                              sizeof(interesting_16) >> 1, "afl-fuzz-one 4835")];
 
               } else {
 
@@ -4840,9 +4881,9 @@ pacemaker_fuzzing:
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING16BE");
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
+                *(u16 *)(out_buf + rand_below(afl, temp_len - 1, "afl-fuzz-one 4834")) =
                     SWAP16(interesting_16[rand_below(
-                        afl, sizeof(interesting_16) >> 1)]);
+                        afl, sizeof(interesting_16) >> 1, "afl-fuzz-one 4845")]);
 
               }
 
@@ -4854,15 +4895,15 @@ pacemaker_fuzzing:
 
               if (temp_len < 8) { break; }
 
-              if (rand_below(afl, 2)) {
+              if (rand_below(afl, 2, "afl-fuzz-one 4857")) {
 
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32");
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
+                *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 4863")) =
                     interesting_32[rand_below(afl,
-                                              sizeof(interesting_32) >> 2)];
+                                              sizeof(interesting_32) >> 2, "afl-fuzz-one 4865")];
 
               } else {
 
@@ -4870,9 +4911,9 @@ pacemaker_fuzzing:
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32BE");
                 strcat(afl->mutation, afl->m_tmp);
 #endif
-                *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
+                *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 4873")) =
                     SWAP32(interesting_32[rand_below(
-                        afl, sizeof(interesting_32) >> 2)]);
+                        afl, sizeof(interesting_32) >> 2, "afl-fuzz-one 4875")]);
 
               }
 
@@ -4885,7 +4926,7 @@ pacemaker_fuzzing:
                  why not. We use XOR with 1-255 to eliminate the
                  possibility of a no-op. */
 
-              out_buf[rand_below(afl, temp_len)] ^= 1 + rand_below(afl, 255);
+              out_buf[rand_below(afl, temp_len, "afl-fuzz-one 4888")] ^= 1 + rand_below(afl, 255, "afl-fuzz-one 4888_");
               MOpt_globals.cycles_v2[STAGE_RANDOMBYTE]++;
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " RAND8");
@@ -4907,7 +4948,7 @@ pacemaker_fuzzing:
 
               del_len = choose_block_len(afl, temp_len - 1);
 
-              del_from = rand_below(afl, temp_len - del_len + 1);
+              del_from = rand_below(afl, temp_len - del_len + 1, "afl-fuzz-one 4910");
 
 #ifdef INTROSPECTION
               snprintf(afl->m_tmp, sizeof(afl->m_tmp), " DEL-%u%u", del_from,
@@ -4930,14 +4971,14 @@ pacemaker_fuzzing:
                 /* Clone bytes (75%) or insert a block of constant bytes (25%).
                  */
 
-                u8  actually_clone = rand_below(afl, 4);
+                u8  actually_clone = rand_below(afl, 4, "afl-fuzz-one 4933");
                 u32 clone_from, clone_to, clone_len;
                 u8 *new_buf;
 
                 if (likely(actually_clone)) {
 
                   clone_len = choose_block_len(afl, temp_len);
-                  clone_from = rand_below(afl, temp_len - clone_len + 1);
+                  clone_from = rand_below(afl, temp_len - clone_len + 1, "afl-fuzz-one 4940");
 
                 } else {
 
@@ -4946,7 +4987,7 @@ pacemaker_fuzzing:
 
                 }
 
-                clone_to = rand_below(afl, temp_len);
+                clone_to = rand_below(afl, temp_len, "afl-fuzz-one 4949");
 
 #ifdef INTROSPECTION
                 snprintf(afl->m_tmp, sizeof(afl->m_tmp), " CLONE_%s-%u-%u-%u",
@@ -4971,9 +5012,9 @@ pacemaker_fuzzing:
                 } else {
 
                   memset(new_buf + clone_to,
-                         rand_below(afl, 2)
-                             ? rand_below(afl, 256)
-                             : out_buf[rand_below(afl, temp_len)],
+                         rand_below(afl, 2, "afl-fuzz-one 4974")
+                             ? rand_below(afl, 256, "afl-fuzz-one 4975")
+                             : out_buf[rand_below(afl, temp_len, "afl-fuzz-one 4976")],
                          clone_len);
 
                 }
@@ -5002,10 +5043,10 @@ pacemaker_fuzzing:
 
               copy_len = choose_block_len(afl, temp_len - 1);
 
-              copy_from = rand_below(afl, temp_len - copy_len + 1);
-              copy_to = rand_below(afl, temp_len - copy_len + 1);
+              copy_from = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 5005");
+              copy_to = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 5006");
 
-              if (likely(rand_below(afl, 4))) {
+              if (likely(rand_below(afl, 4, "afl-fuzz-one 5008"))) {
 
                 if (likely(copy_from != copy_to)) {
 
@@ -5028,8 +5069,8 @@ pacemaker_fuzzing:
                 strcat(afl->mutation, afl->m_tmp);
 #endif
                 memset(out_buf + copy_to,
-                       rand_below(afl, 2) ? rand_below(afl, 256)
-                                          : out_buf[rand_below(afl, temp_len)],
+                       rand_below(afl, 2, "afl-fuzz-one 5031") ? rand_below(afl, 256, "afl-fuzz-one 5031_")
+                                          : out_buf[rand_below(afl, temp_len, "afl-fuzz-one 5032")],
                        copy_len);
 
               }
@@ -5051,17 +5092,17 @@ pacemaker_fuzzing:
                 /* Overwrite bytes with an extra. */
 
                 if (!afl->extras_cnt ||
-                    (afl->a_extras_cnt && rand_below(afl, 2))) {
+                    (afl->a_extras_cnt && rand_below(afl, 2, "afl-fuzz-one 5054"))) {
 
                   /* No user-specified extras or odds in our favor. Let's use an
                     auto-detected one. */
 
-                  u32 use_extra = rand_below(afl, afl->a_extras_cnt);
+                  u32 use_extra = rand_below(afl, afl->a_extras_cnt, "afl-fuzz-one 5059");
                   u32 extra_len = afl->a_extras[use_extra].len;
 
                   if (extra_len > (u32)temp_len) break;
 
-                  u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
+                  u32 insert_at = rand_below(afl, temp_len - extra_len + 1, "afl-fuzz-one 5064");
 #ifdef INTROSPECTION
                   snprintf(afl->m_tmp, sizeof(afl->m_tmp),
                            " AUTO_EXTRA_OVERWRITE-%u-%u", insert_at, extra_len);
@@ -5074,12 +5115,12 @@ pacemaker_fuzzing:
 
                   /* No auto extras or odds in our favor. Use the dictionary. */
 
-                  u32 use_extra = rand_below(afl, afl->extras_cnt);
+                  u32 use_extra = rand_below(afl, afl->extras_cnt, "afl-fuzz-one 5077");
                   u32 extra_len = afl->extras[use_extra].len;
 
                   if (extra_len > (u32)temp_len) break;
 
-                  u32 insert_at = rand_below(afl, temp_len - extra_len + 1);
+                  u32 insert_at = rand_below(afl, temp_len - extra_len + 1, "afl-fuzz-one 5082");
 #ifdef INTROSPECTION
                   snprintf(afl->m_tmp, sizeof(afl->m_tmp),
                            " EXTRA_OVERWRITE-%u-%u", insert_at, extra_len);
@@ -5101,16 +5142,16 @@ pacemaker_fuzzing:
               else if (r == 1 && (afl->extras_cnt || afl->a_extras_cnt)) {
 
                 u32 use_extra, extra_len,
-                    insert_at = rand_below(afl, temp_len + 1);
+                    insert_at = rand_below(afl, temp_len + 1, "afl-fuzz-one 5104");
                 u8 *ptr;
 
                 /* Insert an extra. Do the same dice-rolling stuff as for the
                   previous case. */
 
                 if (!afl->extras_cnt ||
-                    (afl->a_extras_cnt && rand_below(afl, 2))) {
+                    (afl->a_extras_cnt && rand_below(afl, 2, "afl-fuzz-one 5111"))) {
 
-                  use_extra = rand_below(afl, afl->a_extras_cnt);
+                  use_extra = rand_below(afl, afl->a_extras_cnt, "afl-fuzz-one 5113");
                   extra_len = afl->a_extras[use_extra].len;
                   ptr = afl->a_extras[use_extra].data;
 #ifdef INTROSPECTION
@@ -5121,7 +5162,7 @@ pacemaker_fuzzing:
 
                 } else {
 
-                  use_extra = rand_below(afl, afl->extras_cnt);
+                  use_extra = rand_below(afl, afl->extras_cnt, "afl-fuzz-one 5124");
                   extra_len = afl->extras[use_extra].len;
                   ptr = afl->extras[use_extra].data;
 #ifdef INTROSPECTION
@@ -5155,7 +5196,7 @@ pacemaker_fuzzing:
                 u32 tid;
                 do {
 
-                  tid = rand_below(afl, afl->queued_items);
+                  tid = rand_below(afl, afl->queued_items, "afl-fuzz-one 5158");
 
                 } while (tid == afl->current_entry ||
 
@@ -5166,7 +5207,7 @@ pacemaker_fuzzing:
                 u32                 new_len = target->len;
                 u8                 *new_buf = queue_testcase_get(afl, target);
 
-                if ((temp_len >= 2 && rand_below(afl, 2)) ||
+                if ((temp_len >= 2 && rand_below(afl, 2, "afl-fuzz-one 5169")) ||
                     temp_len + HAVOC_BLK_XL >= MAX_FILE) {
 
                   /* overwrite mode */
@@ -5176,8 +5217,8 @@ pacemaker_fuzzing:
                   copy_len = choose_block_len(afl, new_len - 1);
                   if (copy_len > temp_len) copy_len = temp_len;
 
-                  copy_from = rand_below(afl, new_len - copy_len + 1);
-                  copy_to = rand_below(afl, temp_len - copy_len + 1);
+                  copy_from = rand_below(afl, new_len - copy_len + 1, "afl-fuzz-one 5179");
+                  copy_to = rand_below(afl, temp_len - copy_len + 1, "afl-fuzz-one 5180");
 
 #ifdef INTROSPECTION
                   snprintf(afl->m_tmp, sizeof(afl->m_tmp),
@@ -5194,8 +5235,8 @@ pacemaker_fuzzing:
                   u32 clone_from, clone_to, clone_len;
 
                   clone_len = choose_block_len(afl, new_len);
-                  clone_from = rand_below(afl, new_len - clone_len + 1);
-                  clone_to = rand_below(afl, temp_len + 1);
+                  clone_from = rand_below(afl, new_len - clone_len + 1, "afl-fuzz-one 5197");
+                  clone_to = rand_below(afl, temp_len + 1, "afl-fuzz-one 5198");
 
                   u8 *temp_buf = afl_realloc(AFL_BUF_PARAM(out_scratch),
                                              temp_len + clone_len + 1);
@@ -5358,7 +5399,7 @@ pacemaker_fuzzing:
 
         do {
 
-          tid = rand_below(afl, afl->queued_items);
+          tid = rand_below(afl, afl->queued_items, "afl-fuzz-one 5361");
 
         } while (tid == afl->current_entry || afl->queue_buf[tid]->len < 4);
 
@@ -5382,7 +5423,7 @@ pacemaker_fuzzing:
 
         /* Split somewhere between the first and last differing byte. */
 
-        split_at = f_diff + rand_below(afl, l_diff - f_diff);
+        split_at = f_diff + rand_below(afl, l_diff - f_diff, "afl-fuzz-one 5385");
 
         /* Do the thing. */
 
@@ -5412,7 +5453,7 @@ pacemaker_fuzzing:
 
         afl->SPLICE_CYCLES_puppet =
             (rand_below(
-                 afl, SPLICE_CYCLES_puppet_up - SPLICE_CYCLES_puppet_low + 1) +
+                 afl, SPLICE_CYCLES_puppet_up - SPLICE_CYCLES_puppet_low + 1, "afl-fuzz-one 5415") +
              SPLICE_CYCLES_puppet_low);
 
       }

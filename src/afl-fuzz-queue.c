@@ -31,7 +31,7 @@
 
 inline u32 select_next_queue_entry(afl_state_t *afl) {
 
-  u32    s = rand_below(afl, afl->queued_items);
+  u32    s = rand_below(afl, afl->queued_items, "afl-fuzz-queue 34");
   double p = rand_next_percent(afl);
   /*
   fprintf(stderr, "select: p=%f s=%u ... p < prob[s]=%f ? s=%u : alias[%u]=%u"
@@ -520,6 +520,19 @@ static u8 check_if_text(afl_state_t *afl, struct queue_entry *q) {
 void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
 
   struct queue_entry *q = ck_alloc(sizeof(struct queue_entry));
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "add_to_queue");
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
 
   q->fname = fname;
   q->len = len;
@@ -559,7 +572,7 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
   queue_buf[afl->queued_items - 1] = q;
   q->id = afl->queued_items - 1;
 
-  afl->last_find_time = get_cur_time();
+  afl->last_find_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queue 575");
 
   if (afl->custom_mutators_count) {
 
@@ -612,7 +625,6 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
   u32 i;
   u64 fav_factor;
   u64 fuzz_p2;
-
   if (unlikely(afl->schedule >= FAST && afl->schedule < RARE))
     fuzz_p2 = 0;  // Skip the fuzz_p2 comparison
   else if (unlikely(afl->schedule == RARE))
@@ -1228,7 +1240,7 @@ inline u8 *queue_testcase_get(afl_state_t *afl, struct queue_entry *q) {
         // undesirable because q_testcase_max_cache_count grows sometimes
         // although the number of items in the cache will not change hence
         // more and more loops
-        tid = rand_below(afl, afl->q_testcase_max_cache_count);
+        tid = rand_below(afl, afl->q_testcase_max_cache_count, "afl-fuzz-queue 1230");
 
       } while (afl->q_testcase_cache[tid] == NULL ||
 

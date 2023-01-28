@@ -335,7 +335,7 @@ struct custom_mutator *load_custom_mutator(afl_state_t *afl, const char *fn) {
   /* Initialize the custom mutator */
   if (mutator->afl_custom_init) {
 
-    mutator->data = mutator->afl_custom_init(afl, rand_below(afl, 0xFFFFFFFF));
+    mutator->data = mutator->afl_custom_init(afl, rand_below(afl, 0xFFFFFFFF, "afl-fuzz-mutators 338"));
 
   }
 

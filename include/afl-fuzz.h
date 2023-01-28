@@ -624,6 +624,8 @@ typedef struct afl_state {
   s32 cpu_aff;                          /* Selected CPU core                */
 #endif                                                     /* HAVE_AFFINITY */
 
+  int replay;                           /* Replay flag                      */
+
   struct queue_entry *queue,            /* Fuzzing queue (linked list)      */
       *queue_cur,                       /* Current offset within the queue  */
       *queue_top;                       /* Top of the list                  */
@@ -1165,7 +1167,7 @@ double rand_next_percent(afl_state_t *afl);
 /* Generate a random number (from 0 to limit - 1). This may
    have slight bias. */
 
-static inline u32 rand_below(afl_state_t *afl, u32 limit) {
+static inline u32 rand_below(afl_state_t *afl, u32 limit, u8 origin[]) {
 
   if (limit <= 1) return 0;
 
@@ -1173,12 +1175,23 @@ static inline u32 rand_below(afl_state_t *afl, u32 limit) {
      we need to ensure the result uniformity. */
   if (unlikely(!afl->rand_cnt--) && likely(!afl->fixed_seed)) {
 
-    ck_read(afl->fsrv.dev_urandom_fd, &afl->rand_seed, sizeof(afl->rand_seed),
-            "/dev/urandom");
+    if (unlikely(afl->replay)) {
+      ck_read(afl->fsrv.rand_below_fd[1], &afl->rand_seed, sizeof(afl->rand_seed),
+              "rand_below_thing");
+    } else {
+      ck_read(afl->fsrv.dev_urandom_fd, &afl->rand_seed, sizeof(afl->rand_seed),
+              "/dev/urandom");
+    }
+
+    u8 *fn = alloc_printf("%s/replay/rand_below.bin", afl->out_dir);
+    ck_write(afl->fsrv.rand_below_fd[0], &afl->rand_seed, sizeof(afl->rand_seed), fn);
+    ck_free(fn);
+
     // srandom(afl->rand_seed[0]);
     afl->rand_cnt = (RESEED_RNG / 2) + (afl->rand_seed[1] % RESEED_RNG);
 
   }
+
 
   /* Modulo is biased - we don't want our fuzzing to be biased so let's do it
    right. See:
@@ -1191,6 +1204,25 @@ static inline u32 rand_below(afl_state_t *afl, u32 limit) {
 
   } while (unlikely(unbiased_rnd >= (UINT64_MAX - (UINT64_MAX % limit))));
 
+  #ifdef INTROSPECTION
+    u8 fnr1[PATH_MAX];
+    snprintf(fnr1, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *fr1 = fopen(fnr1, "a");
+    //fr1 = fopen(fnr1, "a");
+    if (fr1) {
+
+        fprintf(
+            fr1,
+            "origin: %s\nunbiased_rnd: %llu\nlimit: %u", origin, unbiased_rnd, limit);
+        //fprintf(
+            //fr1,
+            //"0: %llu\n1: %llu\n2: %llu\nunbiased_rnd: %llu\nlimit: %u\nres: %llu", afl->rand_seed[0], afl->rand_seed[1], afl->rand_seed[2], unbiased_rnd, limit, unbiased_rnd & limit);
+
+      fprintf(fr1, "\n");
+      fclose(fr1);
+    }
+  #endif
+
   return unbiased_rnd % limit;
 
 }
@@ -1202,17 +1234,17 @@ static inline u32 rand_below_datalen(afl_state_t *afl, u32 limit) {
 
   if (limit <= 1) return 0;
 
-  switch (rand_below(afl, 3)) {
+  switch (rand_below(afl, 3, "afl-fuzz.h 1256")) {
 
     case 2:
-      return (rand_below(afl, limit) % (1 + rand_below(afl, limit - 1))) %
-             (1 + rand_below(afl, limit - 1));
+      return (rand_below(afl, limit, "afl-fuzz.h 1259") % (1 + rand_below(afl, limit - 1, "afl-fuzz.h 1259_"))) %
+             (1 + rand_below(afl, limit - 1, "afl-fuzz.h 1260"));
       break;
     case 1:
-      return rand_below(afl, limit) % (1 + rand_below(afl, limit - 1));
+      return rand_below(afl, limit, "afl-fuzz.h 1263") % (1 + rand_below(afl, limit - 1, "afl-fuzz.h 1263_"));
       break;
     case 0:
-      return rand_below(afl, limit);
+      return rand_below(afl, limit, "afl-fuzz.h 1266");
       break;
 
   }

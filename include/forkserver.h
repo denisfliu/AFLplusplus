@@ -90,6 +90,8 @@ typedef struct afl_forkserver {
 
   s32 out_fd,                           /* Persistent fd for fsrv->out_file */
       dev_urandom_fd,                   /* Persistent fd for /dev/urandom   */
+      time_fd[2],                      /* Persistent fds for get_cur_time   */
+      rand_below_fd[2],                 /* Persistent fds for rand_below     */
 
       dev_null_fd,                      /* Persistent fd for /dev/null      */
       fsrv_ctl_fd,                      /* Fork server control pipe (write) */
@@ -133,6 +135,8 @@ typedef struct afl_forkserver {
   bool no_unlink;                       /* do not unlink cur_input          */
 
   bool uses_asan;                       /* Target uses ASAN?                */
+
+  bool replay;                          /* Replaying prev run               */
 
   bool debug;                           /* debug mode?                      */
 

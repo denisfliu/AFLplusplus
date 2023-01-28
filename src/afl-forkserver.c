@@ -92,6 +92,10 @@ void afl_fsrv_init(afl_forkserver_t *fsrv) {
   fsrv->out_dir_fd = -1;
   fsrv->dev_null_fd = -1;
   fsrv->dev_urandom_fd = -1;
+  fsrv->rand_below_fd[0] = -1;
+  fsrv->rand_below_fd[1] = -1;
+  fsrv->time_fd[0] = -1;
+  fsrv->time_fd[1] = -1;
 
   /* Settings */
   fsrv->use_stdin = true;
@@ -111,6 +115,7 @@ void afl_fsrv_init(afl_forkserver_t *fsrv) {
   fsrv->debug = false;
   fsrv->uses_crash_exitcode = false;
   fsrv->uses_asan = false;
+  fsrv->replay = false;
 
   fsrv->init_child_func = fsrv_exec_child;
   list_append(&fsrv_list, fsrv);
@@ -130,12 +135,17 @@ void afl_fsrv_init_dup(afl_forkserver_t *fsrv_to, afl_forkserver_t *from) {
   fsrv_to->support_shmem_fuzz = from->support_shmem_fuzz;
   fsrv_to->out_file = from->out_file;
   fsrv_to->dev_urandom_fd = from->dev_urandom_fd;
+  fsrv_to->time_fd[0] = from->time_fd[0];
+  fsrv_to->time_fd[1] = from->time_fd[1];
+  fsrv_to->rand_below_fd[0] = from->rand_below_fd[0];
+  fsrv_to->rand_below_fd[1] = from->rand_below_fd[1];
   fsrv_to->out_fd = from->out_fd;  // not sure this is a good idea
   fsrv_to->no_unlink = from->no_unlink;
   fsrv_to->uses_crash_exitcode = from->uses_crash_exitcode;
   fsrv_to->crash_exitcode = from->crash_exitcode;
   fsrv_to->kill_signal = from->kill_signal;
   fsrv_to->debug = from->debug;
+  fsrv_to->replay = from->replay;
 
   // These are forkserver specific.
   fsrv_to->out_dir_fd = -1;
@@ -270,6 +280,10 @@ static void afl_fauxsrv_execv(afl_forkserver_t *fsrv, char **argv) {
       close(fsrv->out_dir_fd);
       close(fsrv->dev_null_fd);
       close(fsrv->dev_urandom_fd);
+      close(fsrv->time_fd[0]);
+      close(fsrv->time_fd[1]);
+      close(fsrv->rand_below_fd[0]);
+      close(fsrv->rand_below_fd[1]);
 
       if (fsrv->plot_file != NULL) {
 
@@ -1535,7 +1549,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   }
 
   exec_ms = read_s32_timed(fsrv->fsrv_st_fd, &fsrv->child_status, timeout,
-                           stop_soon_p);
+                          stop_soon_p);
 
   if (exec_ms > timeout) {
 
@@ -1592,6 +1606,43 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
      behave very normally and do not have to be treated as volatile. */
 
   MEM_BARRIER();
+
+
+/*
+  if (unlikely(fsrv->replay)) {
+    ck_read(fsrv->time_fd[1], &exec_ms, sizeof(exec_ms), "time thingy");
+    ck_read(fsrv->time_fd[1], &fsrv->child_status, sizeof(fsrv->child_status), "time thingy");
+    ck_read(fsrv->time_fd[1], fsrv->trace_bits, sizeof(*fsrv->trace_bits), "time thingy");
+    ck_read(fsrv->time_fd[1], &fsrv->last_run_timed_out, sizeof(fsrv->last_run_timed_out), "time thingy");
+    ck_read(fsrv->time_fd[1], &fsrv->uses_crash_exitcode, sizeof(fsrv->uses_crash_exitcode), "time thingy");
+    ck_read(fsrv->time_fd[1], &fsrv->total_execs, sizeof(fsrv->total_execs), "time thingy");
+  }
+  ck_write(fsrv->time_fd[0], &exec_ms, sizeof(exec_ms), "time thingy");
+  ck_write(fsrv->time_fd[0], &fsrv->child_status, sizeof(fsrv->child_status), "time thingy");
+  ck_write(fsrv->time_fd[0], fsrv->trace_bits, sizeof(*fsrv->trace_bits), "time thingy");
+  ck_write(fsrv->time_fd[0], &fsrv->last_run_timed_out, sizeof(fsrv->last_run_timed_out), "time thingy");
+  ck_write(fsrv->time_fd[0], &fsrv->uses_crash_exitcode, sizeof(fsrv->uses_crash_exitcode), "time thingy");
+  ck_write(fsrv->time_fd[0], &fsrv->total_execs, sizeof(fsrv->total_execs), "time thingy");
+
+  #ifdef INTROSPECTION
+    u8 fn1[PATH_MAX];
+    snprintf(fn1, PATH_MAX, "dryrunthing.txt");
+    FILE *f1 = fopen(fn1, "a");
+    if (f1) {
+
+        fprintf( f1, "child_pid: %u\n", fsrv->child_pid);
+        fprintf( f1, "child_status: %u\n", fsrv->child_status);
+        fprintf( f1, "exec_ms: %u\n", exec_ms);
+        fprintf( f1, "trace bits: %s\n", fsrv->trace_bits);
+        fprintf( f1, "lastruntimedout: %u\n", fsrv->last_run_timed_out);
+        fprintf( f1, "usescrashexitcode: %u\n", fsrv->uses_crash_exitcode);
+
+      fprintf(f1, "\n");
+      fclose(f1);
+
+    }
+  #endif
+  */
 
   /* Report outcome to caller. */
 

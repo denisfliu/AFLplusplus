@@ -484,7 +484,7 @@ struct custom_mutator *load_custom_mutator_py(afl_state_t *afl,
   OKF("Python mutator '%s' installed successfully.", module_name);
 
   /* Initialize the custom mutator */
-  init_py(afl, py_mutator, rand_below(afl, 0xFFFFFFFF));
+  init_py(afl, py_mutator, rand_below(afl, 0xFFFFFFFF, "afl-fuzz-python 487"));
 
   mutator->stacked_custom = (mutator && mutator->afl_custom_havoc_mutation);
   mutator->stacked_custom_prob =

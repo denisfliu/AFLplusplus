@@ -532,6 +532,9 @@ int main(int argc, char **argv_orig, char **envp) {
   if (afl->shm.map_size) { afl->fsrv.map_size = afl->shm.map_size; }
   exit_1 = !!afl->afl_env.afl_bench_just_one;
 
+  afl->replay = 0;
+  //afl->got_rand_seed = 0;
+
   SAYF(cCYA "afl-fuzz" VERSION cRST
             " based on afl by Michal Zalewski and a large online community\n");
 
@@ -545,7 +548,7 @@ int main(int argc, char **argv_orig, char **envp) {
   while (
       (opt = getopt(
            argc, argv,
-           "+Ab:B:c:CdDe:E:hi:I:f:F:g:G:l:L:m:M:nNOo:p:RQs:S:t:T:UV:WXx:YZ")) >
+           "+Ab:B:c:CdDe:E:hi:I:f:F:g:G:l:L:m:M:nNOo:p:Rr:Qs:S:t:T:UV:WXx:YZ")) >
       0) {
 
     switch (opt) {
@@ -1278,6 +1281,23 @@ int main(int argc, char **argv_orig, char **envp) {
 
         break;
 
+      case 'r':
+        afl->replay = 1;
+        afl->fsrv.replay = true;
+        u8 *tmp;
+        tmp = alloc_printf("%s/default/replay/time.bin", optarg);
+        afl->fsrv.time_fd[1] = open(tmp, O_RDONLY);
+        if (afl->fsrv.time_fd[1] < 0) { PFATAL("Unable to open time file"); }
+        ck_free(tmp);
+
+        tmp = alloc_printf("%s/default/replay/rand_below.bin", optarg);
+        afl->fsrv.rand_below_fd[1] = open(tmp, O_RDONLY);
+        if (afl->fsrv.rand_below_fd[1] < 0) { PFATAL("Unable to open rand below file"); }
+
+        ck_read(afl->fsrv.rand_below_fd[1], &afl->rand_seed, sizeof(afl->rand_seed), tmp);
+        ck_free(tmp);
+        break;
+
       default:
         if (!show_help) { show_help = 1; }
 
@@ -1832,7 +1852,7 @@ int main(int argc, char **argv_orig, char **envp) {
   #ifdef RAND_TEST_VALUES
   u32 counter;
   for (counter = 0; counter < 100000; counter++)
-    printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536));
+    printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536, "afl-fuzz.c 1856"));
   #endif
 
   setup_custom_mutators(afl);
@@ -2536,7 +2556,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
         if (unlikely(afl->is_main_node)) {
 
-          if (unlikely(get_cur_time() >
+          if (unlikely(get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2559") >
                        (afl->sync_time >> 1) + afl->last_sync_time)) {
 
             if (!(sync_interval_cnt++ % (SYNC_INTERVAL / 3))) {
@@ -2549,7 +2569,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
         } else {
 
-          if (unlikely(get_cur_time() > afl->sync_time + afl->last_sync_time)) {
+          if (unlikely(get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2572") > afl->sync_time + afl->last_sync_time)) {
 
             if (!(sync_interval_cnt++ % SYNC_INTERVAL)) { sync_fuzzers(afl); }
 
@@ -2602,7 +2622,7 @@ stop_fuzzing:
   /* Running for more than 30 minutes but still doing first cycle? */
 
   if (afl->queue_cycle == 1 &&
-      get_cur_time() - afl->start_time > 30 * 60 * 1000) {
+      get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2625") - afl->start_time > 30 * 60 * 1000) {
 
     SAYF("\n" cYEL "[!] " cRST
          "Stopped during the first cycle, results may be incomplete.\n"
@@ -2615,7 +2635,7 @@ stop_fuzzing:
 
     u32 t_bytes = count_non_255_bytes(afl, afl->virgin_bits);
     u8  time_tmp[64];
-    u_stringify_time_diff(time_tmp, get_cur_time(), afl->start_time);
+    u_stringify_time_diff(time_tmp, get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2638"), afl->start_time);
     ACTF(
         "Statistics: %u new corpus items found, %.02f%% coverage achieved, "
         "%llu crashes saved, %llu timeouts saved, total runtime %s",

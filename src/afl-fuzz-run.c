@@ -426,8 +426,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   }
 
-  start_us = get_cur_time_us();
-
+  start_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
     if (unlikely(afl->debug)) {
@@ -519,7 +518,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   } else {
 
-    stop_us = get_cur_time_us();
+    stop_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
     diff_us = stop_us - start_us;
     if (unlikely(!diff_us)) { ++diff_us; }
 
@@ -539,6 +538,19 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
   }
 
   q->exec_us = diff_us / afl->stage_max;
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/exec_times.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "%llu", q->exec_us);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
   q->bitmap_size = count_bytes(afl, afl->fsrv.trace_bits);
   q->handicap = handicap;
   q->cal_failed = 0;
@@ -756,6 +768,19 @@ void sync_fuzzers(afl_state_t *afl) {
         if (afl->stop_soon) { goto close_sync; }
 
         afl->syncing_party = sd_ent->d_name;
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "save_if_interesting sync_fuzzers");
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
         afl->queued_imported +=
             save_if_interesting(afl, mem, st.st_size, fault);
         afl->syncing_party = 0;
@@ -799,7 +824,7 @@ void sync_fuzzers(afl_state_t *afl) {
 
   if (afl->foreign_sync_cnt) read_foreign_testcases(afl, 0);
 
-  afl->last_sync_time = get_cur_time();
+  afl->last_sync_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "run 827");
   afl->last_sync_cycle = afl->queue_cycle;
 
 }
@@ -1030,7 +1055,33 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   /* This handles FAULT_ERROR for us: */
 
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "afl->queued_items: %u\n", afl->queued_items);
+        fprintf( f, "fault: %u\n", fault);
+        fprintf( f, "save_if_interesting common_fuzz_stuff");
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
   afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault);
+  #ifdef INTROSPECTION
+    f = fopen(fn, "a");
+    if (f) {
+
+      fprintf( f, "afl->queued_items: %u", afl->queued_items);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
 
   if (!(afl->stage_cur % afl->stats_update_freq) ||
       afl->stage_cur + 1 == afl->stage_max) {

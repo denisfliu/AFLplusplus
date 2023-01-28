@@ -68,8 +68,8 @@ static void test_rand_below(void **state) {
 
     afl.fsrv.dev_urandom_fd = open("/dev/urandom", O_RDONLY);
 
-    assert(!(rand_below(&afl, 9000) > 9000));
-    assert_int_equal(rand_below(&afl, 1), 0);
+    assert(!(rand_below(&afl, 9000, "afl-fuzz-redqueen 183") > 9000));
+    assert_int_equal(rand_below(&afl, 1, "afl-fuzz-redqueen 183"), 0);
 
 }
 

@@ -73,7 +73,7 @@ void concatPrefixFeature(Array *prefix, Array *feature) {
   // the recursive feature. Might want to fix it to choose a random number upper
   // bounded by a static value instead.
   terminal *featureptr;
-  int       len = rand_below(global_afl, RECUR_THRESHOLD);
+  int       len = rand_below(global_afl, RECUR_THRESHOLD, "gramfuzz-helpers.c 76");
   for (int x = 0; x < len; x++) {
 
     for (int y = 0; y < feature->used; y++) {
@@ -149,7 +149,7 @@ Array *gen_input(state *pda, Array *input) {
     state_ptr = pda + curr_state;
 
     // Get a random trigger
-    randval = rand_below(global_afl, state_ptr->trigger_len);
+    randval = rand_below(global_afl, state_ptr->trigger_len, "gramfuzz-helpers.c 152");
     trigger_ptr = (state_ptr->ptr) + randval;
 
     // Insert into the dynamic array
@@ -187,7 +187,7 @@ Array *gen_input_count(state *pda, Array *input, int *mut_count) {
     state_ptr = pda + curr_state;
 
     // Get a random trigger
-    randval = rand_below(global_afl, state_ptr->trigger_len);
+    randval = rand_below(global_afl, state_ptr->trigger_len, "gramfuzz-helpers.c 190");
     trigger_ptr = (state_ptr->ptr) + randval;
 
     // Insert into the dynamic array

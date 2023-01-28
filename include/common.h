@@ -80,10 +80,12 @@ void read_bitmap(u8 *fname, u8 *map, size_t len);
 /* Get unix time in milliseconds */
 
 u64 get_cur_time(void);
+u64 get_cur_or_replay_time(s32 time_fd[2], int replay, u8 *fname, u8 *origin);
 
 /* Get unix time in microseconds */
 
 u64 get_cur_time_us(void);
+u64 get_cur_or_replay_time_us(s32 time_fd[2], int replay);
 
 /* Describe integer. The buf should be
    at least 6 bytes to fit all ints we randomly see.
