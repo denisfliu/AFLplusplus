@@ -758,7 +758,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       ++afl->saved_hangs;
 
-      afl->last_hang_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 721");
+      afl->last_hang_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 721");
 
       break;
 
@@ -847,7 +847,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
       }
 
-      afl->last_crash_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 810");
+      afl->last_crash_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 810");
       afl->last_crash_execs = afl->fsrv.total_execs;
 
       break;

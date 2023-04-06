@@ -573,7 +573,7 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
   queue_buf[afl->queued_items - 1] = q;
   q->id = afl->queued_items - 1;
 
-  afl->last_find_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queue 575");
+  afl->last_find_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queue 575");
 
   if (afl->custom_mutators_count) {
 

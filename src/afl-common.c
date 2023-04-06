@@ -935,7 +935,7 @@ u64 get_cur_time(void) {
 
 /* Get unix time in milliseconds and record */
 
-u64 get_cur_or_replay_time(s32 time_fd[2], int replay, u8 *fname, u8 *origin) {
+u64 get_replayable_time(s32 time_fd[2], int replay, u8 *fname, u8 *origin) {
 
   #ifdef INTROSPECTION
     u8 fn[PATH_MAX];
@@ -977,7 +977,7 @@ u64 get_cur_time_us(void) {
 
 /* Get unix time in microseconds */
 
-u64 get_cur_or_replay_time_us(s32 time_fd[2], int replay) {
+u64 get_replayable_time_us(s32 time_fd[2], int replay) {
 
   u64 time;
   if (unlikely(replay)) {

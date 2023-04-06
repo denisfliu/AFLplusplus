@@ -466,7 +466,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   }
 
-  start_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
+  start_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
     if (unlikely(afl->debug)) {
@@ -558,7 +558,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   } else {
 
-    stop_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
+    stop_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
     diff_us = stop_us - start_us;
     if (unlikely(!diff_us)) { ++diff_us; }
 
@@ -864,7 +864,7 @@ void sync_fuzzers(afl_state_t *afl) {
 
   if (afl->foreign_sync_cnt) read_foreign_testcases(afl, 0);
 
-  afl->last_sync_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "run 827");
+  afl->last_sync_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "run 827");
   afl->last_sync_cycle = afl->queue_cycle;
 
 }

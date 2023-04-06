@@ -2630,7 +2630,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
         if (unlikely(afl->is_main_node)) {
 
-          if (unlikely(get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2559") >
+          if (unlikely(get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2559") >
                        (afl->sync_time >> 1) + afl->last_sync_time)) {
 
             if (!(sync_interval_cnt++ % (SYNC_INTERVAL / 3))) {
@@ -2643,7 +2643,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
         } else {
 
-          if (unlikely(get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2572") > afl->sync_time + afl->last_sync_time)) {
+          if (unlikely(get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2572") > afl->sync_time + afl->last_sync_time)) {
 
             if (!(sync_interval_cnt++ % SYNC_INTERVAL)) { sync_fuzzers(afl); }
 
@@ -2696,7 +2696,7 @@ stop_fuzzing:
   /* Running for more than 30 minutes but still doing first cycle? */
 
   if (afl->queue_cycle == 1 &&
-      get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2625") - afl->start_time > 30 * 60 * 1000) {
+      get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2625") - afl->start_time > 30 * 60 * 1000) {
 
     SAYF("\n" cYEL "[!] " cRST
          "Stopped during the first cycle, results may be incomplete.\n"
@@ -2709,7 +2709,7 @@ stop_fuzzing:
 
     u32 t_bytes = count_non_255_bytes(afl, afl->virgin_bits);
     u8  time_tmp[64];
-    u_stringify_time_diff(time_tmp, get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2638"), afl->start_time);
+    u_stringify_time_diff(time_tmp, get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2638"), afl->start_time);
     ACTF(
         "Statistics: %u new corpus items found, %.02f%% coverage achieved, "
         "%llu crashes saved, %llu timeouts saved, total runtime %s",

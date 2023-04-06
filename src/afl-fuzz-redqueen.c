@@ -176,7 +176,7 @@ static void random_replace(afl_state_t *afl, u8 *buf, u32 len) {
 
     do {
 
-      c = rand_below(afl, 256);
+      c = rand_below(afl, 256, "redqueen 179");
 
     } while (c == buf[i]);
 
@@ -291,7 +291,7 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
   u8             *changed = ck_alloc_nozero(len);
 
 #if defined(_DEBUG) || defined(CMPLOG_INTROSPECTION)
-  u64 start_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 275");
+  u64 start_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 275");
 #endif
 
   u64 orig_hit_cnt, new_hit_cnt, exec_cksum;
@@ -330,14 +330,14 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
     memcpy(buf + rng->start, changed + rng->start, s);
 
     u64 cksum = 0;
-    u64 start_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
+    u64 start_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
     if (unlikely(get_exec_checksum(afl, buf, len, &cksum))) {
 
       goto checksum_fail;
 
     }
 
-    u64 stop_us = get_cur_or_replay_time_us(afl->fsrv.time_fd, afl->replay);
+    u64 stop_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
 
     /* Discard if the mutations change the path or if it is too decremental
       in speed - how could the same path have a much different speed
@@ -472,7 +472,7 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
         f,
         "Colorization: fname=%s len=%u ms=%llu result=%u execs=%u found=%llu "
         "taint=%u ascii=%u auto_extra_before=%u\n",
-        afl->queue_cur->fname, len, get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 448") - start_time,
+        afl->queue_cur->fname, len, get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 448") - start_time,
         afl->queue_cur->colorized, afl->stage_cur, new_hit_cnt - orig_hit_cnt,
         positions, afl->queue_cur->is_ascii ? 1 : 0, afl->a_extras_cnt);
 
@@ -2692,7 +2692,7 @@ u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len) {
   }
 
 #if defined(_DEBUG) || defined(CMPLOG_INTROSPECTION)
-  u64 start_time = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 2668");
+  u64 start_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 2668");
   u32 cmp_locations = 0;
 #endif
 
@@ -2946,7 +2946,7 @@ exit_its:
     fprintf(f,
             "Cmplog: fname=%s len=%u ms=%llu result=%u finds=%llu entries=%u "
             "auto_extra_after=%u\n",
-            afl->queue_cur->fname, len, get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 2922") - start_time, r,
+            afl->queue_cur->fname, len, get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queen 2922") - start_time, r,
             new_hit_cnt - orig_hit_cnt, cmp_locations, afl->a_extras_cnt);
 
   #ifndef _DEBUG

@@ -565,7 +565,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
           (afl->cmplog_lvl == 2 && afl->queue_cur->tc_ref) ||
           afl->queue_cur->favored ||
           !(afl->fsrv.total_execs % afl->queued_items) ||
-          get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 568") - afl->last_find_time > 300000) {  // 300 seconds
+          get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 568") - afl->last_find_time > 300000) {  // 300 seconds
 
         if (input_to_state_stage(afl, in_buf, out_buf, len)) {
 
@@ -2145,7 +2145,7 @@ havoc_stage:
 
   }
 
-  u64 tempTime = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 2097");
+  u64 tempTime = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 2097");
   if (unlikely(tempTime - afl->last_find_time > 5000 /* 5 seconds */ &&
                afl->ready_for_splicing_count > 1)) {
 
@@ -3322,7 +3322,7 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
       if (afl->cmplog_lvl == 3 ||
           (afl->cmplog_lvl == 2 && afl->queue_cur->tc_ref) ||
           !(afl->fsrv.total_execs % afl->queued_items) ||
-          get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 3268") - afl->last_find_time > 300000) {  // 300 seconds
+          get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 3268") - afl->last_find_time > 300000) {  // 300 seconds
 
         if (input_to_state_stage(afl, in_buf, out_buf, len)) {
 
@@ -3338,7 +3338,7 @@ static u8 mopt_common_fuzzing(afl_state_t *afl, MOpt_globals_t MOpt_globals) {
 
   /* Go to pacemker fuzzing if MOpt is doing well */
 
-  cur_ms_lv = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 3284");
+  cur_ms_lv = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 3284");
   if (!(afl->key_puppet == 0 &&
         ((cur_ms_lv - afl->last_find_time < (u32)afl->limit_time_puppet) ||
          (afl->last_crash_time != 0 &&
@@ -4687,7 +4687,7 @@ pacemaker_fuzzing:
       if (unlikely(afl->orig_hit_cnt_puppet == 0)) {
 
         afl->orig_hit_cnt_puppet = afl->queued_items + afl->saved_crashes;
-        afl->last_limit_time_start = get_cur_or_replay_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 4585");
+        afl->last_limit_time_start = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "one 4585");
         afl->SPLICE_CYCLES_puppet =
             (rand_below(
                  afl, SPLICE_CYCLES_puppet_up - SPLICE_CYCLES_puppet_low + 1, "afl-fuzz-one 4547") +
