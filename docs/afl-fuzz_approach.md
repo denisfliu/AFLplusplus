@@ -419,8 +419,8 @@ the process. Be sure to consult this file especially if any UI elements are
 highlighted in red.
 
 The fuzzing process will continue until you press Ctrl-C. At a minimum, you want
-to allow the fuzzer to complete one queue cycle, which may take anywhere from a
-couple of hours to a week or so.
+to allow the fuzzer to at least one queue cycle without any new finds, which may
+take anywhere from a couple of hours to a week or so.
 
 There are three subdirectories created within the output directory and updated
 in real-time:
@@ -483,6 +483,7 @@ directory. This includes:
 - `fuzzer_pid`        - PID of the fuzzer process
 - `cycles_done`       - queue cycles completed so far
 - `cycles_wo_finds`   - number of cycles without any new paths found
+- `time_wo_finds`     - longest time in seconds no new path was found
 - `execs_done`        - number of execve() calls attempted
 - `execs_per_sec`     - overall number of execs per second
 - `corpus_count`      - total number of entries in the queue

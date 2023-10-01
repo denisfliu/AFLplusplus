@@ -24,7 +24,9 @@
  */
 
 #include "afl-fuzz.h"
+#include "common.h"
 #include <limits.h>
+#include <string.h>
 #include "cmplog.h"
 
 #ifdef HAVE_AFFINITY
@@ -714,12 +716,25 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
 
   }
 
+  // if (getenv("MYTEST")) afl->in_place_resume = 1;
+
   if (nl_cnt) {
 
-    i = nl_cnt;
+    u32 done = 0;
+
+    if (unlikely(afl->in_place_resume)) {
+
+      i = nl_cnt;
+
+    } else {
+
+      i = 0;
+
+    }
+
     do {
 
-      --i;
+      if (unlikely(afl->in_place_resume)) { --i; }
 
       struct stat st;
       u8          dfn[PATH_MAX];
@@ -743,7 +758,7 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
         free(nl[i]);                                         /* not tracked */
         read_testcases(afl, fn2);
         ck_free(fn2);
-        continue;
+        goto next_entry;
 
       }
 
@@ -752,7 +767,7 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
       if (!S_ISREG(st.st_mode) || !st.st_size || strstr(fn2, "/README.txt")) {
 
         ck_free(fn2);
-        continue;
+        goto next_entry;
 
       }
 
@@ -799,20 +814,22 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
 
       }
 
-      /*
-          if (unlikely(afl->schedule >= FAST && afl->schedule <= RARE)) {
+    next_entry:
+      if (unlikely(afl->in_place_resume)) {
 
-            u64 cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size,
-         HASH_CONST); afl->queue_top->n_fuzz_entry = cksum % N_FUZZ_SIZE;
-            afl->n_fuzz[afl->queue_top->n_fuzz_entry] = 1;
+        if (unlikely(i == 0)) { done = 1; }
 
-          }
+      } else {
 
-      */
+        if (unlikely(++i >= (u32)nl_cnt)) { done = 1; }
 
-    } while (i > 0);
+      }
+
+    } while (!done);
 
   }
+
+  // if (getenv("MYTEST")) afl->in_place_resume = 0;
 
   free(nl);                                                  /* not tracked */
 
@@ -895,8 +912,10 @@ void perform_dry_run(afl_state_t *afl) {
 
     if (res == afl->crash_mode || res == FSRV_RUN_NOBITS) {
 
-      SAYF(cGRA "    len = %u, map size = %u, exec speed = %llu us\n" cRST,
-           q->len, q->bitmap_size, q->exec_us);
+      SAYF(cGRA
+           "    len = %u, map size = %u, exec speed = %llu us, hash = "
+           "%016llx\n" cRST,
+           q->len, q->bitmap_size, q->exec_us, q->exec_cksum);
 
     }
 
@@ -923,6 +942,7 @@ void perform_dry_run(afl_state_t *afl) {
           if (!q->was_fuzzed) {
 
             q->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 
@@ -932,19 +952,48 @@ void perform_dry_run(afl_state_t *afl) {
 
         } else {
 
-          SAYF("\n" cLRD "[-] " cRST
-               "The program took more than %u ms to process one of the initial "
-               "test cases.\n"
-               "    This is bad news; raising the limit with the -t option is "
-               "possible, but\n"
-               "    will probably make the fuzzing process extremely slow.\n\n"
+          static int say_once = 0;
 
-               "    If this test case is just a fluke, the other option is to "
-               "just avoid it\n"
-               "    altogether, and find one that is less of a CPU hog.\n",
-               afl->fsrv.exec_tmout);
+          if (!say_once) {
 
-          FATAL("Test case '%s' results in a timeout", fn);
+            SAYF(
+                "\n" cLRD "[-] " cRST
+                "The program took more than %u ms to process one of the "
+                "initial "
+                "test cases.\n"
+                "    This is bad news; raising the limit with the -t option is "
+                "possible, but\n"
+                "    will probably make the fuzzing process extremely slow.\n\n"
+
+                "    If this test case is just a fluke, the other option is to "
+                "just avoid it\n"
+                "    altogether, and find one that is less of a CPU hog.\n",
+                afl->fsrv.exec_tmout);
+
+            if (!afl->afl_env.afl_ignore_seed_problems) {
+
+              FATAL("Test case '%s' results in a timeout", fn);
+
+            }
+
+            say_once = 1;
+
+          }
+
+          if (!q->was_fuzzed) {
+
+            q->was_fuzzed = 1;
+            afl->reinit_table = 1;
+            --afl->pending_not_fuzzed;
+            --afl->active_items;
+
+          }
+
+          q->disabled = 1;
+          q->perf_score = 0;
+
+          WARNF("Test case '%s' results in a timeout, skipping", fn);
+          break;
 
         }
 
@@ -993,7 +1042,7 @@ void perform_dry_run(afl_state_t *afl) {
 
                "    - Least likely, there is a horrible bug in the fuzzer. If "
                "other options\n"
-               "      fail, poke <afl-users@googlegroups.com> for "
+               "      fail, poke the Awesome Fuzzing Discord for "
                "troubleshooting tips.\n",
                stringify_mem_size(val_buf, sizeof(val_buf),
                                   afl->fsrv.mem_limit << 20),
@@ -1022,7 +1071,7 @@ void perform_dry_run(afl_state_t *afl) {
 
                "    - Least likely, there is a horrible bug in the fuzzer. If "
                "other options\n"
-               "      fail, poke <afl-users@googlegroups.com> for "
+               "      fail, poke the Awesome Fuzzing Discord for "
                "troubleshooting tips.\n");
 
         }
@@ -1039,7 +1088,19 @@ void perform_dry_run(afl_state_t *afl) {
 
         } else {
 
-          WARNF("Test case '%s' results in a crash, skipping", fn);
+          if (afl->afl_env.afl_crashing_seeds_as_new_crash) {
+
+            WARNF(
+                "Test case '%s' results in a crash, "
+                "as AFL_CRASHING_SEEDS_AS_NEW_CRASH is set, "
+                "saving as a new crash",
+                fn);
+
+          } else {
+
+            WARNF("Test case '%s' results in a crash, skipping", fn);
+
+          }
 
         }
 
@@ -1054,40 +1115,100 @@ void perform_dry_run(afl_state_t *afl) {
         if (!q->was_fuzzed) {
 
           q->was_fuzzed = 1;
+          afl->reinit_table = 1;
           --afl->pending_not_fuzzed;
           --afl->active_items;
 
         }
 
-        q->disabled = 1;
-        q->perf_score = 0;
+        /* Crashing seeds will be regarded as new crashes on startup */
+        if (afl->afl_env.afl_crashing_seeds_as_new_crash) {
 
-        u32 i = 0;
-        while (unlikely(i < afl->queued_items && afl->queue_buf[i] &&
-                        afl->queue_buf[i]->disabled)) {
+          ++afl->total_crashes;
 
-          ++i;
+          if (likely(!afl->non_instrumented_mode)) {
 
-        }
+            classify_counts(&afl->fsrv);
 
-        if (i < afl->queued_items && afl->queue_buf[i]) {
+            simplify_trace(afl, afl->fsrv.trace_bits);
 
-          afl->queue = afl->queue_buf[i];
+            if (!has_new_bits(afl, afl->virgin_crash)) { break; }
+
+          }
+
+          if (unlikely(!afl->saved_crashes) &&
+              (afl->afl_env.afl_no_crash_readme != 1)) {
+
+            write_crash_readme(afl);
+
+          }
+
+          u8  crash_fn[PATH_MAX];
+          u8 *use_name = strstr(q->fname, ",orig:");
+
+          afl->stage_name = "dry_run";
+          afl->stage_short = "dry_run";
+
+#ifndef SIMPLE_FILES
+
+          snprintf(crash_fn, PATH_MAX, "%s/crashes/id:%06llu,sig:%02u,%s%s",
+                   afl->out_dir, afl->saved_crashes, afl->fsrv.last_kill_signal,
+                   describe_op(afl, 0,
+                               NAME_MAX - strlen("id:000000,sig:00,") -
+                                   strlen(use_name)),
+                   use_name);
+
+#else
+
+          snprintf(crash_fn, PATH_MAX, "%s/crashes/id_%06llu_%02u",
+                   afl->out_dir, afl->saved_crashes,
+                   afl->fsrv.last_kill_signal);
+
+#endif
+
+          ++afl->saved_crashes;
+
+          fd = open(crash_fn, O_WRONLY | O_CREAT | O_EXCL, DEFAULT_PERMISSION);
+          if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", crash_fn); }
+          ck_write(fd, use_mem, read_len, crash_fn);
+          close(fd);
+
+          afl->last_crash_time = get_cur_time();
+          afl->last_crash_execs = afl->fsrv.total_execs;
 
         } else {
 
-          afl->queue = afl->queue_buf[0];
+          u32 i = 0;
+          while (unlikely(i < afl->queued_items && afl->queue_buf[i] &&
+                          afl->queue_buf[i]->disabled)) {
+
+            ++i;
+
+          }
+
+          if (i < afl->queued_items && afl->queue_buf[i]) {
+
+            afl->queue = afl->queue_buf[i];
+
+          } else {
+
+            afl->queue = afl->queue_buf[0];
+
+          }
+
+          afl->max_depth = 0;
+          for (i = 0; i < afl->queued_items && likely(afl->queue_buf[i]); i++) {
+
+            if (!afl->queue_buf[i]->disabled &&
+                afl->queue_buf[i]->depth > afl->max_depth)
+              afl->max_depth = afl->queue_buf[i]->depth;
+
+          }
 
         }
 
-        afl->max_depth = 0;
-        for (i = 0; i < afl->queued_items && likely(afl->queue_buf[i]); i++) {
-
-          if (!afl->queue_buf[i]->disabled &&
-              afl->queue_buf[i]->depth > afl->max_depth)
-            afl->max_depth = afl->queue_buf[i]->depth;
-
-        }
+        q->disabled = 1;
+        q->perf_score = 0;
 
         break;
 
@@ -1120,7 +1241,7 @@ void perform_dry_run(afl_state_t *afl) {
 
     }
 
-    if (q->var_behavior) {
+    if (unlikely(q->var_behavior && !afl->afl_env.afl_no_warn_instability)) {
 
       WARNF("Instrumentation output varies across runs.");
 
@@ -1151,14 +1272,14 @@ void perform_dry_run(afl_state_t *afl) {
 
   u32 duplicates = 0, i;
 
-  for (idx = 0; idx < afl->queued_items; idx++) {
+  for (idx = 0; idx < afl->queued_items - 1; idx++) {
 
     q = afl->queue_buf[idx];
     if (!q || q->disabled || q->cal_failed || !q->exec_cksum) { continue; }
-
     u32 done = 0;
+
     for (i = idx + 1;
-         i < afl->queued_items && !done && likely(afl->queue_buf[i]); i++) {
+         likely(i < afl->queued_items && afl->queue_buf[i] && !done); ++i) {
 
       struct queue_entry *p = afl->queue_buf[i];
       if (p->disabled || p->cal_failed || !p->exec_cksum) { continue; }
@@ -1173,6 +1294,7 @@ void perform_dry_run(afl_state_t *afl) {
           if (!p->was_fuzzed) {
 
             p->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 
@@ -1181,11 +1303,19 @@ void perform_dry_run(afl_state_t *afl) {
           p->disabled = 1;
           p->perf_score = 0;
 
+          if (afl->debug) {
+
+            WARNF("Same coverage - %s is kept active, %s is disabled.",
+                  q->fname, p->fname);
+
+          }
+
         } else {
 
           if (!q->was_fuzzed) {
 
             q->was_fuzzed = 1;
+            afl->reinit_table = 1;
             --afl->pending_not_fuzzed;
             --afl->active_items;
 
@@ -1194,7 +1324,14 @@ void perform_dry_run(afl_state_t *afl) {
           q->disabled = 1;
           q->perf_score = 0;
 
-          done = 1;
+          if (afl->debug) {
+
+            WARNF("Same coverage - %s is kept active, %s is disabled.",
+                  p->fname, q->fname);
+
+          }
+
+          done = 1;  // end inner loop because outer loop entry is disabled now
 
         }
 
@@ -1509,8 +1646,8 @@ double get_runnable_processes(void) {
      processes well. */
 
   FILE *f = fopen("/proc/stat", "r");
-  u8 tmp[1024];
-  u32 val = 0;
+  u8    tmp[1024];
+  u32   val = 0;
 
   if (!f) { return 0; }
 
@@ -2182,7 +2319,8 @@ void check_crash_handling(void) {
      reporting the awful way. */
 
   #if !TARGET_OS_IPHONE
-  if (system("launchctl list 2>/dev/null | grep -q '\\.ReportCrash$'")) return;
+  if (system("launchctl list 2>/dev/null | grep -q '\\.ReportCrash\\>'"))
+    return;
 
   SAYF(
       "\n" cLRD "[-] " cRST
@@ -2209,7 +2347,7 @@ void check_crash_handling(void) {
    *BSD, so we can just let it slide for now. */
 
   s32 fd = open("/proc/sys/kernel/core_pattern", O_RDONLY);
-  u8 fchar;
+  u8  fchar;
 
   if (fd < 0) { return; }
 
@@ -2348,7 +2486,7 @@ void check_cpu_governor(afl_state_t *afl) {
   FATAL("Suboptimal CPU scaling governor");
 
 #elif defined __APPLE__
-  u64 min = 0, max = 0;
+  u64    min = 0, max = 0;
   size_t mlen = sizeof(min);
   if (afl->afl_env.afl_skip_cpufreq) return;
 
@@ -2802,7 +2940,7 @@ void check_binary(afl_state_t *afl, u8 *fname) {
       !afl->fsrv.nyx_mode &&
 #endif
       !afl->fsrv.cs_mode && !afl->non_instrumented_mode &&
-      !memmem(f_data, f_len, SHM_ENV_VAR, strlen(SHM_ENV_VAR) + 1)) {
+      !afl_memmem(f_data, f_len, SHM_ENV_VAR, strlen(SHM_ENV_VAR) + 1)) {
 
     SAYF("\n" cLRD "[-] " cRST
          "Looks like the target binary is not instrumented! The fuzzer depends "
@@ -2833,7 +2971,7 @@ void check_binary(afl_state_t *afl, u8 *fname) {
   }
 
   if ((afl->fsrv.cs_mode || afl->fsrv.qemu_mode || afl->fsrv.frida_mode) &&
-      memmem(f_data, f_len, SHM_ENV_VAR, strlen(SHM_ENV_VAR) + 1)) {
+      afl_memmem(f_data, f_len, SHM_ENV_VAR, strlen(SHM_ENV_VAR) + 1)) {
 
     SAYF("\n" cLRD "[-] " cRST
          "This program appears to be instrumented with afl-gcc, but is being "
@@ -2846,9 +2984,9 @@ void check_binary(afl_state_t *afl, u8 *fname) {
 
   }
 
-  if (memmem(f_data, f_len, "__asan_init", 11) ||
-      memmem(f_data, f_len, "__msan_init", 11) ||
-      memmem(f_data, f_len, "__lsan_init", 11)) {
+  if (afl_memmem(f_data, f_len, "__asan_init", 11) ||
+      afl_memmem(f_data, f_len, "__msan_init", 11) ||
+      afl_memmem(f_data, f_len, "__lsan_init", 11)) {
 
     afl->fsrv.uses_asan = 1;
 
@@ -2856,7 +2994,7 @@ void check_binary(afl_state_t *afl, u8 *fname) {
 
   /* Detect persistent & deferred init signatures in the binary. */
 
-  if (memmem(f_data, f_len, PERSIST_SIG, strlen(PERSIST_SIG) + 1)) {
+  if (afl_memmem(f_data, f_len, PERSIST_SIG, strlen(PERSIST_SIG) + 1)) {
 
     OKF(cPIN "Persistent mode binary detected.");
     setenv(PERSIST_ENV_VAR, "1", 1);
@@ -2883,7 +3021,7 @@ void check_binary(afl_state_t *afl, u8 *fname) {
   }
 
   if (afl->fsrv.frida_mode ||
-      memmem(f_data, f_len, DEFER_SIG, strlen(DEFER_SIG) + 1)) {
+      afl_memmem(f_data, f_len, DEFER_SIG, strlen(DEFER_SIG) + 1)) {
 
     OKF(cPIN "Deferred forkserver binary detected.");
     setenv(DEFER_ENV_VAR, "1", 1);
@@ -2939,8 +3077,11 @@ void setup_signal_handlers(void) {
 
   struct sigaction sa;
 
+  memset((void *)&sa, 0, sizeof(sa));
   sa.sa_handler = NULL;
+#ifdef SA_RESTART
   sa.sa_flags = SA_RESTART;
+#endif
   sa.sa_sigaction = NULL;
 
   sigemptyset(&sa.sa_mask);

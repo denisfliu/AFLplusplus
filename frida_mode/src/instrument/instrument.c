@@ -27,6 +27,7 @@ gboolean instrument_optimize = false;
 gboolean instrument_unique = false;
 guint64  instrument_hash_zero = 0;
 guint64  instrument_hash_seed = 0;
+gboolean instrument_suppress = false;
 
 gboolean instrument_use_fixed_seed = FALSE;
 guint64  instrument_fixed_seed = 0;
@@ -168,7 +169,6 @@ static void instrument_basic_block(GumStalkerIterator *iterator,
 
     if (unlikely(begin)) { instrument_debug_start(instr->address, output); }
 
-    if (instr->address == entry_point) { entry_prologue(iterator, output); }
     if (instr->address == persistent_start) { persistent_prologue(output); }
     if (instr->address == persistent_ret) { persistent_epilogue(output); }
 
@@ -290,6 +290,7 @@ void instrument_config(void) {
       (getenv("AFL_FRIDA_INST_UNSTABLE_COVERAGE_FILE"));
   instrument_coverage_insn = (getenv("AFL_FRIDA_INST_INSN") != NULL);
   instrument_regs_filename = getenv("AFL_FRIDA_INST_REGS_FILE");
+  instrument_suppress = (getenv("AFL_FRIDA_INST_NO_SUPPRESS") == NULL);
 
   instrument_debug_config();
   instrument_coverage_config();
@@ -320,6 +321,9 @@ void instrument_init(void) {
            : instrument_coverage_unstable_filename);
   FOKF(cBLU "Instrumentation" cRST " - " cGRN "instructions:" cYEL " [%c]",
        instrument_coverage_insn ? 'X' : ' ');
+
+  FOKF(cBLU "Instrumentation" cRST " - " cGRN "suppression:" cYEL " [%c]",
+       instrument_suppress ? 'X' : ' ');
 
   if (instrument_tracing && instrument_optimize) {
 

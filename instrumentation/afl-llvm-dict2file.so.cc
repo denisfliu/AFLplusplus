@@ -53,7 +53,9 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#if LLVM_VERSION_MAJOR < 17
+  #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#endif
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -182,7 +184,7 @@ bool AFLdict2filePass::runOnModule(Module &M) {
 
   DenseMap<Value *, std::string *> valueMap;
   char                            *ptr;
-  int                              found = 0;
+  int                              found = 0, handle_main = 1;
 
   /* Show a banner */
   setvbuf(stdout, NULL, _IONBF, 0);
@@ -192,9 +194,13 @@ bool AFLdict2filePass::runOnModule(Module &M) {
     SAYF(cCYA "afl-llvm-dict2file" VERSION cRST
               " by Marc \"vanHauser\" Heuse <mh@mh-sec.de>\n");
 
-  } else
+  } else {
 
     be_quiet = 1;
+
+  }
+
+  if (getenv("AFL_LLVM_DICT2FILE_NO_MAIN")) { handle_main = 0; }
 
   scanForDangerousFunctions(&M);
 
@@ -210,7 +216,14 @@ bool AFLdict2filePass::runOnModule(Module &M) {
 
   for (auto &F : M) {
 
-    if (isIgnoreFunction(&F)) continue;
+    if (!handle_main &&
+        (!F.getName().compare("main") || !F.getName().compare("_main"))) {
+
+      continue;
+
+    }
+
+    if (isIgnoreFunction(&F)) { continue; }
     if (!isInInstrumentList(&F, MNAME) || !F.size()) { continue; }
 
     /*  Some implementation notes.
@@ -733,7 +746,7 @@ static void registerAFLdict2filePass(const PassManagerBuilder &,
 }
 
 static RegisterPass<AFLdict2filePass> X("afl-dict2file",
-                                        "afl++ dict2file instrumentation pass",
+                                        "AFL++ dict2file instrumentation pass",
                                         false, false);
 
 static RegisterStandardPasses RegisterAFLdict2filePass(

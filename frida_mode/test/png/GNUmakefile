@@ -8,7 +8,7 @@ HARNESS_BUILD_DIR:=$(BUILD_DIR)harness/
 PNGTEST_BUILD_DIR:=$(BUILD_DIR)pngtest/
 
 LIBZ_FILE:=$(LIBZ_BUILD_DIR)zlib-1.2.13.tar.gz
-LIBZ_URL:=http://www.zlib.net/zlib-1.2.13.tar.gz
+LIBZ_URL:=http://www.zlib.net/fossils/zlib-1.2.13.tar.gz
 LIBZ_DIR:=$(LIBZ_BUILD_DIR)zlib-1.2.13/
 LIBZ_PC:=$(LIBZ_DIR)zlib.pc
 LIBZ_LIB:=$(LIBZ_DIR)libz.a
@@ -25,7 +25,7 @@ HARNESS_URL:="https://raw.githubusercontent.com/llvm/llvm-project/main/compiler-
 
 PNGTEST_FILE:=$(PNGTEST_BUILD_DIR)target.cc
 PNGTEST_OBJ:=$(PNGTEST_BUILD_DIR)target.o
-PNGTEST_URL:="https://raw.githubusercontent.com/google/fuzzbench/master/benchmarks/libpng-1.2.56/target.cc"
+PNGTEST_URL:="https://raw.githubusercontent.com/google/fuzzbench/e0c4a994b6999bae46e8dec5bcea9a73251b8dba/benchmarks/libpng-1.2.56/target.cc"
 
 TEST_BIN:=$(BUILD_DIR)test
 ifeq "$(shell uname)" "Darwin"

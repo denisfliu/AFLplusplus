@@ -24,6 +24,7 @@
  */
 
 #include <signal.h>
+#include <limits.h>
 #include "afl-fuzz.h"
 #include "envs.h"
 
@@ -100,12 +101,14 @@ void afl_state_init(afl_state_t *afl, uint32_t map_size) {
   afl->hang_tmout = EXEC_TIMEOUT;
   afl->exit_on_time = 0;
   afl->stats_update_freq = 1;
+  afl->stats_file_update_freq_msecs = STATS_UPDATE_SEC * 1000;
   afl->stats_avg_exec = 0;
   afl->skip_deterministic = 1;
   afl->sync_time = SYNC_TIME;
   afl->cmplog_lvl = 2;
   afl->min_length = 1;
   afl->max_length = MAX_FILE;
+  afl->switch_fuzz_mode = STRATEGY_SWITCH_TIME * 1000;
 #ifndef NO_SPLICING
   afl->use_splicing = 1;
 #endif
@@ -197,11 +200,25 @@ void read_afl_environment(afl_state_t *afl, char **envp) {
             afl->afl_env.afl_exit_on_time =
                 (u8 *)get_afl_env(afl_environment_variables[i]);
 
+          } else if (!strncmp(env, "AFL_CRASHING_SEEDS_AS_NEW_CRASH",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_crashing_seeds_as_new_crash =
+                atoi((u8 *)get_afl_env(afl_environment_variables[i]));
+
           } else if (!strncmp(env, "AFL_NO_AFFINITY",
 
                               afl_environment_variable_len)) {
 
             afl->afl_env.afl_no_affinity =
+                get_afl_env(afl_environment_variables[i]) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_NO_WARN_INSTABILITY",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_no_warn_instability =
                 get_afl_env(afl_environment_variables[i]) ? 1 : 0;
 
           } else if (!strncmp(env, "AFL_TRY_AFFINITY",
@@ -252,6 +269,13 @@ void read_afl_environment(afl_state_t *afl, char **envp) {
             afl->afl_env.afl_import_first =
                 get_afl_env(afl_environment_variables[i]) ? 1 : 0;
 
+          } else if (!strncmp(env, "AFL_FINAL_SYNC",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_final_sync =
+                get_afl_env(afl_environment_variables[i]) ? 1 : 0;
+
           } else if (!strncmp(env, "AFL_CUSTOM_MUTATOR_ONLY",
 
                               afl_environment_variable_len)) {
@@ -290,6 +314,20 @@ void read_afl_environment(afl_state_t *afl, char **envp) {
                               afl_environment_variable_len)) {
 
             afl->afl_env.afl_ignore_problems =
+                get_afl_env(afl_environment_variables[i]) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_IGNORE_SEED_PROBLEMS",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_ignore_seed_problems =
+                get_afl_env(afl_environment_variables[i]) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_IGNORE_TIMEOUTS",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_ignore_timeouts =
                 get_afl_env(afl_environment_variables[i]) ? 1 : 0;
 
           } else if (!strncmp(env, "AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES",
@@ -376,6 +414,13 @@ void read_afl_environment(afl_state_t *afl, char **envp) {
                               afl_environment_variable_len)) {
 
             afl->afl_env.afl_statsd =
+                get_afl_env(afl_environment_variables[i]) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_POST_PROCESS_KEEP_ORIGINAL",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_post_process_keep_original =
                 get_afl_env(afl_environment_variables[i]) ? 1 : 0;
 
           } else if (!strncmp(env, "AFL_TMPDIR",
@@ -551,6 +596,26 @@ void read_afl_environment(afl_state_t *afl, char **envp) {
 
             }
 
+          } else if (!strncmp(env, "AFL_FUZZER_STATS_UPDATE_INTERVAL",
+
+                              afl_environment_variable_len)) {
+
+            u64 stats_update_freq_sec =
+                strtoull(get_afl_env(afl_environment_variables[i]), NULL, 0);
+            if (stats_update_freq_sec >= UINT_MAX ||
+                0 == stats_update_freq_sec) {
+
+              WARNF(
+                  "Incorrect value given to AFL_FUZZER_STATS_UPDATE_INTERVAL, "
+                  "using default of %d seconds\n",
+                  STATS_UPDATE_SEC);
+
+            } else {
+
+              afl->stats_file_update_freq_msecs = stats_update_freq_sec * 1000;
+
+            }
+
           }
 
         } else {
@@ -612,7 +677,15 @@ void read_afl_environment(afl_state_t *afl, char **envp) {
 
   }
 
-  if (afl->afl_env.afl_pizza_mode) { afl->pizza_is_served = 1; }
+  if (afl->afl_env.afl_pizza_mode > 0) {
+
+    afl->pizza_is_served = 1;
+
+  } else if (afl->afl_env.afl_pizza_mode < 0) {
+
+    OKF("Pizza easter egg mode is now disabled.");
+
+  }
 
   if (issue_detected) { sleep(2); }
 

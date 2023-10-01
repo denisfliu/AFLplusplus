@@ -24,7 +24,7 @@ import importlib.metadata
 
 # string_re = re.compile('(\\"(\\\\.|[^"\\\\])*\\")') # TODO: for future use
 
-CURRENT_LLVM = os.getenv('LLVM_VERSION', 14)
+CURRENT_LLVM = os.getenv('LLVM_VERSION', 16)
 CLANG_FORMAT_BIN = os.getenv("CLANG_FORMAT_BIN", "")
 
 
@@ -40,7 +40,7 @@ def check_clang_format_pip_version():
     if importlib.util.find_spec('clang_format'):
         # Check if the installed version is the expected LLVM version
         if importlib.metadata.version('clang-format')\
-                .startswith(CURRENT_LLVM+'.'):
+                .startswith(str(CURRENT_LLVM)+'.'):
             return True
         else:
             # Return False, because the clang-format version does not match

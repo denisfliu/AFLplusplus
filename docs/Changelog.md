@@ -3,17 +3,117 @@
   This is the list of all noteworthy changes made in every public
   release of the tool. See README.md for the general instruction manual.
 
-### Version ++4.06a (dev)
+### Version ++4.09a (dev)
+  - afl-fuzz:
+    - added `AFL_FINAL_SYNC` which forces a final fuzzer sync (also for `-F`)
+      before terminating.
+    - added AFL_IGNORE_SEED_PROBLEMS to skip over seeds that time out instead
+      of exiting with an error message
+    - allow -S/-M naming up to 50 characters (from 24)
+  - afl-whatsup:
+    - detect instanced that are starting up and show them as such as not dead
+    - now also shows coverage reached
+    - option -m shows only very relevant stats
+    - option -n will not use color in the output
+  - instrumentation:
+    - fix for a few string compare transform functions for LAF
+  - frida_mode:
+    - fixes support for large map offsets
+  - added benchmark/benchmark.sh if you want to see how good your fuzzing
+    speed is in comparison to other setups.
+
+
+### Version ++4.08c (release)
+  - afl-fuzz:
+    - new mutation engine: mutations that favor discovery more paths are
+      prefered until no new finds for 10 minutes then switching to mutations
+      that favor triggering crashes. Modes and switch time can be configured
+      with `-P`. Also input mode for the target can be defined with `-a` to
+      be `text` or `binary` (defaults to `generic`)
+    - new custom mutator that has the new afl++ engine (so it can easily
+      incorporated into new custom mutators), and also comes with a standalone
+      command line tool! See custom_mutators/aflpp/standalone/
+    - display the state of the fuzzing run in the UI :-)
+    - fix timeout setting if '+' is used or a session is restarted
+    - -l X option to enable base64 transformation solving
+    - allow to disable CMPLOG with '-c -' (e.g. afl.rs enforces '-c 0' on
+      every instance which is counterproductive).
+  - afl-cmin/afl-cmin.bash:
+    - fixed a bug inherited from vanilla AFL where a coverage of
+      map[123] = 11 would be the same as map[1123] = 1
+    - warn on crashing inputs
+    - adjust threads if less inputs than threads specified
+  - afl-cc:
+    - fixed an off-by-one instrumentation of iselect, hurting coverage a bit.
+      Thanks to @amykweon for spotting and fixing!
+    - @toka fixed a bug in laf-intel signed integer comparison splitting,
+      thanks a lot!!
+    - more LLVM compatability
+  - frida_mode:
+    - support for long form instrumentation on x86_x64 and arm64
+    - renamed utils/get_symbol_addr.sh to utils/frida_get_symbol_addr.sh
+  - qemu_mode:
+    - added qemu_mode/utils/qemu_get_symbol_addr.sh
+
+### Version ++4.07c (release)
+  - afl-fuzz:
+    - reverse reading the seeds only on restarts (increases performance)
+    - new env `AFL_POST_PROCESS_KEEP_ORIGINAL` to keep the orignal
+      data before post process on finds (for atnwalk custom mutator)
+    - new env `AFL_IGNORE_PROBLEMS_COVERAGE` to ignore coverage from
+      loaded libs after forkserver initialization (required by Mozilla)
+  - afl-cc:
+    - added @responsefile support
+    - new env `AFL_LLVM_LTO_SKIPINIT` to support the AFL++ based WASM
+      (https://github.com/fgsect/WAFL) project
+    - error and print help if afl-clan-lto is used with lto=thin
+    - rewrote our PCGUARD pass to be compatible with LLVM 15+ shenanigans,
+      requires LLVM 13+ now instead of 10.0.1+
+    - fallback to native LLVM PCGUARD if our PCGUARD is unavailable
+    - fixed a crash in GCC CMPLOG
+  - afl-showmap:
+    - added custom mutator post_process and send support
+    - add `-I filelist` option, an alternative to `-i in_dir`
+  - afl-cmin + afl-cmin.bash:
+    - `-T threads` parallel task support, can be a huge speedup!
+  - qemu_mode:
+    - Persistent mode + QASAN support for ppc32 targets by @worksbutnottested
+  - a new grammar custom mutator atnwalk was submitted by @voidptr127 !
+  - two new custom mutators are now available:
+    - TritonDSE in custom_mutators/aflpp_tritondse
+    - SymQEMU in custom_mutators/symqemu
+
+### Version ++4.06c (release)
   - afl-fuzz:
     - ensure temporary file descriptor is closed when not used
+    - added `AFL_NO_WARN_INSTABILITY`
+    - added time_wo_finds to fuzzer_stats
+    - fixed a crash in pizza (1st april easter egg) mode. Sorry for
+      everyone who was affected!
+    - allow pizza mode to be disabled when AFL_PIZZA_MODE is set to -1
+    - option `-p mmopt` now also selects new queue items more often
+    - fix bug in post_process custom mutator implementation
+    - print name of custom mutator in UI
+    - slight changes that improve fuzzer performance
   - afl-cc:
     - add CFI sanitizer variant to gcc targets
-    - llvm 16 support (thanks to @devnexen!)
+    - llvm 16 + 17 support (thanks to @devnexen!)
     - support llvm 15 native pcguard changes
+    - support for LLVMFuzzerTestOneInput -1 return
+    - LTO autoken and llvm_mode: added AFL_LLVM_DICT2FILE_NO_MAIN support
+  - qemu_mode:
+    - fix _RANGES envs to allow hyphens in the filenames
+    - basic riscv support
+  - frida_mode:
+    - added `AFL_FRIDA_STATS_INTERVAL`
+    - fix issue on MacOS
+  - unicorn_mode:
+    - updated and minor issues fixed
+  - nyx_mode support for all tools
   - better sanitizer default options support for all tools
-  - unicorn_mode: updated and minor issues fixed
-  - frida_mode: fix issue on MacOS
-  - more minor fixes
+  - new custom module: autotoken, a grammar free fuzzer for text inputs
+  - fixed custom mutator C examples
+  - more minor fixes and cross-platform support
 
 ### Version ++4.05c (release)
   - MacOS: libdislocator, libtokencap etc. do not work with modern
@@ -191,7 +291,7 @@
     afl-showmap and other tools.
   - afl-cc:
     - detect overflow reads on initial input buffer for asan
-    - new cmplog mode (incompatible with older afl++ versions)
+    - new cmplog mode (incompatible with older AFL++ versions)
     - support llvm IR select instrumentation for default PCGUARD and LTO
     - fix for shared linking on MacOS
     - better selective instrumentation AFL_LLVM_{ALLOW|DENY}LIST

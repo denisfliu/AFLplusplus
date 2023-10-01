@@ -27,17 +27,35 @@
 #include <ctype.h>
 #include <math.h>
 
+#ifdef _STANDALONE_MODULE
+void minimize_bits(afl_state_t *afl, u8 *dst, u8 *src) {
+
+  return;
+
+}
+
+void run_afl_custom_queue_new_entry(afl_state_t *afl, struct queue_entry *q,
+                                    u8 *a, u8 *b) {
+
+  return;
+
+}
+
+#endif
+
 /* select next queue entry based on alias algo - fast! */
 
 inline u32 select_next_queue_entry(afl_state_t *afl) {
 
   u32    s = rand_below(afl, afl->queued_items, "afl-fuzz-queue 34");
   double p = rand_next_percent(afl);
+
   /*
   fprintf(stderr, "select: p=%f s=%u ... p < prob[s]=%f ? s=%u : alias[%u]=%u"
   " ==> %u\n", p, s, afl->alias_probability[s], s, s, afl->alias_table[s], p <
   afl->alias_probability[s] ? s : afl->alias_table[s]);
   */
+
   return (p < afl->alias_probability[s] ? s : afl->alias_table[s]);
 
 }
@@ -51,16 +69,18 @@ double compute_weight(afl_state_t *afl, struct queue_entry *q,
   if (likely(afl->schedule >= FAST && afl->schedule <= RARE)) {
 
     u32 hits = afl->n_fuzz[q->n_fuzz_entry];
-    if (likely(hits)) { weight *= (log10(hits) + 1); }
+    if (likely(hits)) { weight /= (log10(hits) + 1); }
 
   }
 
   if (likely(afl->schedule < RARE)) { weight *= (avg_exec_us / q->exec_us); }
   weight *= (log(q->bitmap_size) / avg_bitmap_size);
   weight *= (1 + (q->tc_ref / avg_top_size));
-  if (unlikely(weight < 1.0)) { weight = 1.0; }
+
+  if (unlikely(weight < 0.1)) { weight = 0.1; }
   if (unlikely(q->favored)) { weight *= 5; }
   if (unlikely(!q->was_fuzzed)) { weight *= 2; }
+  if (unlikely(q->fs_redundant)) { weight *= 0.8; }
 
   return weight;
 
@@ -70,25 +90,28 @@ double compute_weight(afl_state_t *afl, struct queue_entry *q,
 
 void create_alias_table(afl_state_t *afl) {
 
-  u32    n = afl->queued_items, i = 0, a, g;
+  u32    n = afl->queued_items, i = 0, nSmall = 0, nLarge = n - 1;
   double sum = 0;
+
+  double *P = (double *)afl_realloc(AFL_BUF_PARAM(out), n * sizeof(double));
+  u32 *Small = (int *)afl_realloc(AFL_BUF_PARAM(out_scratch), n * sizeof(u32));
+  u32 *Large = (int *)afl_realloc(AFL_BUF_PARAM(in_scratch), n * sizeof(u32));
 
   afl->alias_table =
       (u32 *)afl_realloc((void **)&afl->alias_table, n * sizeof(u32));
   afl->alias_probability = (double *)afl_realloc(
       (void **)&afl->alias_probability, n * sizeof(double));
-  double *P = (double *)afl_realloc(AFL_BUF_PARAM(out), n * sizeof(double));
-  int    *S = (u32 *)afl_realloc(AFL_BUF_PARAM(out_scratch), n * sizeof(u32));
-  int    *L = (u32 *)afl_realloc(AFL_BUF_PARAM(in_scratch), n * sizeof(u32));
 
-  if (!P || !S || !L || !afl->alias_table || !afl->alias_probability) {
+  if (!P || !Small || !Large || !afl->alias_table || !afl->alias_probability) {
 
     FATAL("could not acquire memory for alias table");
 
   }
 
-  memset((void *)afl->alias_table, 0, n * sizeof(u32));
   memset((void *)afl->alias_probability, 0, n * sizeof(double));
+  memset((void *)afl->alias_table, 0, n * sizeof(u32));
+  memset((void *)Small, 0, n * sizeof(u32));
+  memset((void *)Large, 0, n * sizeof(u32));
 
   if (likely(afl->schedule < RARE)) {
 
@@ -132,10 +155,32 @@ void create_alias_table(afl_state_t *afl) {
 
     }
 
+    if (unlikely(afl->schedule == MMOPT) && afl->queued_discovered) {
+
+      u32 cnt = afl->queued_discovered >= 5 ? 5 : afl->queued_discovered;
+
+      for (i = n - cnt; i < n; i++) {
+
+        struct queue_entry *q = afl->queue_buf[i];
+
+        if (likely(!q->disabled)) { q->weight *= 2.0; }
+
+      }
+
+    }
+
     for (i = 0; i < n; i++) {
 
       // weight is always 0 for disabled entries
-      P[i] = (afl->queue_buf[i]->weight * n) / sum;
+      if (unlikely(afl->queue_buf[i]->disabled)) {
+
+        P[i] = 0;
+
+      } else {
+
+        P[i] = (afl->queue_buf[i]->weight * n) / sum;
+
+      }
 
     }
 
@@ -145,60 +190,81 @@ void create_alias_table(afl_state_t *afl) {
 
       struct queue_entry *q = afl->queue_buf[i];
 
-      if (likely(!q->disabled)) { q->perf_score = calculate_score(afl, q); }
+      if (likely(!q->disabled)) {
 
-      sum += q->perf_score;
+        q->perf_score = calculate_score(afl, q);
+        sum += q->perf_score;
+
+      }
 
     }
 
     for (i = 0; i < n; i++) {
 
       // perf_score is always 0 for disabled entries
-      P[i] = (afl->queue_buf[i]->perf_score * n) / sum;
+      if (unlikely(afl->queue_buf[i]->disabled)) {
+
+        P[i] = 0;
+
+      } else {
+
+        P[i] = (afl->queue_buf[i]->perf_score * n) / sum;
+
+      }
 
     }
 
   }
 
-  int nS = 0, nL = 0, s;
-  for (s = (s32)n - 1; s >= 0; --s) {
+  // Done collecting weightings in P, now create the arrays.
 
-    if (P[s] < 1) {
+  for (s32 j = (s32)(n - 1); j >= 0; j--) {
 
-      S[nS++] = s;
+    if (P[j] < 1) {
+
+      Small[nSmall++] = (u32)j;
 
     } else {
 
-      L[nL++] = s;
+      Large[nLarge--] = (u32)j;
 
     }
 
   }
 
-  while (nS && nL) {
+  while (nSmall && nLarge != n - 1) {
 
-    a = S[--nS];
-    g = L[--nL];
-    afl->alias_probability[a] = P[a];
-    afl->alias_table[a] = g;
-    P[g] = P[g] + P[a] - 1;
-    if (P[g] < 1) {
+    u32 small = Small[--nSmall];
+    u32 large = Large[++nLarge];
 
-      S[nS++] = g;
+    afl->alias_probability[small] = P[small];
+    afl->alias_table[small] = large;
+
+    P[large] = P[large] - (1 - P[small]);
+
+    if (P[large] < 1) {
+
+      Small[nSmall++] = large;
 
     } else {
 
-      L[nL++] = g;
+      Large[nLarge--] = large;
 
     }
 
   }
 
-  while (nL)
-    afl->alias_probability[L[--nL]] = 1;
+  while (nSmall) {
 
-  while (nS)
-    afl->alias_probability[S[--nS]] = 1;
+    afl->alias_probability[Small[--nSmall]] = 1;
+
+  }
+
+  while (nLarge != n - 1) {
+
+    afl->alias_probability[Large[++nLarge]] = 1;
+
+  }
 
   afl->reinit_table = 0;
 
@@ -233,7 +299,7 @@ void create_alias_table(afl_state_t *afl) {
   */
   /*
   fprintf(stderr, "  entry  alias  probability  perf_score   weight
-  filename\n"); for (u32 i = 0; i < n; ++i) fprintf(stderr, "  %5u  %5u  %11u
+  filename\n"); for (i = 0; i < n; ++i) fprintf(stderr, "  %5u  %5u  %11u
   %0.9f  %0.9f  %s\n", i, afl->alias_table[i], afl->alias_probability[i],
   afl->queue_buf[i]->perf_score, afl->queue_buf[i]->weight,
             afl->queue_buf[i]->fname);
@@ -247,11 +313,11 @@ void create_alias_table(afl_state_t *afl) {
 
 void mark_as_det_done(afl_state_t *afl, struct queue_entry *q) {
 
-  u8  fn[PATH_MAX];
-  s32 fd;
+  char fn[PATH_MAX];
+  s32  fd;
 
   snprintf(fn, PATH_MAX, "%s/queue/.state/deterministic_done/%s", afl->out_dir,
-           strrchr(q->fname, '/') + 1);
+           strrchr((char *)q->fname, '/') + 1);
 
   fd = open(fn, O_WRONLY | O_CREAT | O_EXCL, DEFAULT_PERMISSION);
   if (fd < 0) { PFATAL("Unable to create '%s'", fn); }
@@ -266,10 +332,10 @@ void mark_as_det_done(afl_state_t *afl, struct queue_entry *q) {
 
 void mark_as_variable(afl_state_t *afl, struct queue_entry *q) {
 
-  u8 fn[PATH_MAX];
-  u8 ldest[PATH_MAX];
+  char fn[PATH_MAX];
+  char ldest[PATH_MAX];
 
-  u8 *fn_name = strrchr(q->fname, '/') + 1;
+  char *fn_name = strrchr((char *)q->fname, '/') + 1;
 
   sprintf(ldest, "../../%s", fn_name);
   sprintf(fn, "%s/queue/.state/variable_behavior/%s", afl->out_dir, fn_name);
@@ -293,12 +359,12 @@ void mark_as_redundant(afl_state_t *afl, struct queue_entry *q, u8 state) {
 
   if (likely(state == q->fs_redundant)) { return; }
 
-  u8 fn[PATH_MAX];
+  char fn[PATH_MAX];
 
   q->fs_redundant = state;
 
   sprintf(fn, "%s/queue/.state/redundant_edges/%s", afl->out_dir,
-          strrchr(q->fname, '/') + 1);
+          strrchr((char *)q->fname, '/') + 1);
 
   if (state) {
 
@@ -409,7 +475,7 @@ u8 check_if_text_buf(u8 *buf, u32 len) {
 
 static u8 check_if_text(afl_state_t *afl, struct queue_entry *q) {
 
-  if (q->len < AFL_TXT_MIN_LEN) return 0;
+  if (q->len < AFL_TXT_MIN_LEN || q->len < AFL_TXT_MAX_LEN) return 0;
 
   u8     *buf;
   int     fd;
@@ -417,8 +483,8 @@ static u8 check_if_text(afl_state_t *afl, struct queue_entry *q) {
   ssize_t comp;
 
   if (len >= MAX_FILE) len = MAX_FILE - 1;
-  if ((fd = open(q->fname, O_RDONLY)) < 0) return 0;
-  buf = afl_realloc(AFL_BUF_PARAM(in_scratch), len + 1);
+  if ((fd = open((char *)q->fname, O_RDONLY)) < 0) return 0;
+  buf = (u8 *)afl_realloc(AFL_BUF_PARAM(in_scratch), len + 1);
   comp = read(fd, buf, len);
   close(fd);
   if (comp != (ssize_t)len) return 0;
@@ -559,7 +625,7 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
 
   }
 
-  if (likely(q->len > 4)) afl->ready_for_splicing_count++;
+  if (likely(q->len > 4)) { ++afl->ready_for_splicing_count; }
 
   ++afl->queued_items;
   ++afl->active_items;
@@ -567,13 +633,30 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
 
   afl->cycles_wo_finds = 0;
 
-  struct queue_entry **queue_buf = afl_realloc(
+  struct queue_entry **queue_buf = (struct queue_entry **)afl_realloc(
       AFL_BUF_PARAM(queue), afl->queued_items * sizeof(struct queue_entry *));
   if (unlikely(!queue_buf)) { PFATAL("alloc"); }
   queue_buf[afl->queued_items - 1] = q;
   q->id = afl->queued_items - 1;
 
-  afl->last_find_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queue 575");
+  u64 cur_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "queue 575");
+
+  if (likely(afl->start_time) &&
+      unlikely(afl->longest_find_time < cur_time - afl->last_find_time)) {
+
+    if (unlikely(!afl->last_find_time)) {
+
+      afl->longest_find_time = cur_time - afl->start_time;
+
+    } else {
+
+      afl->longest_find_time = cur_time - afl->last_find_time;
+
+    }
+
+  }
+
+  afl->last_find_time = cur_time;
 
   if (afl->custom_mutators_count) {
 
@@ -587,7 +670,11 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
   }
 
   /* only redqueen currently uses is_ascii */
-  if (afl->shm.cmplog_mode) q->is_ascii = check_if_text(afl, q);
+  if (unlikely(afl->shm.cmplog_mode && !q->is_ascii)) {
+
+    q->is_ascii = check_if_text(afl, q);
+
+  }
 
 }
 
@@ -626,12 +713,20 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
   u32 i;
   u64 fav_factor;
   u64 fuzz_p2;
-  if (unlikely(afl->schedule >= FAST && afl->schedule < RARE))
+
+  if (likely(afl->schedule >= FAST && afl->schedule < RARE)) {
+
     fuzz_p2 = 0;  // Skip the fuzz_p2 comparison
-  else if (unlikely(afl->schedule == RARE))
+
+  } else if (unlikely(afl->schedule == RARE)) {
+
     fuzz_p2 = next_pow2(afl->n_fuzz[q->n_fuzz_entry]);
-  else
+
+  } else {
+
     fuzz_p2 = q->fuzz_level;
+
+  }
 
   if (unlikely(afl->schedule >= RARE) || unlikely(afl->fixed_seed)) {
 
@@ -654,11 +749,21 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
         /* Faster-executing or smaller test cases are favored. */
         u64 top_rated_fav_factor;
         u64 top_rated_fuzz_p2;
-        if (unlikely(afl->schedule >= FAST && afl->schedule <= RARE))
+
+        if (likely(afl->schedule >= FAST && afl->schedule < RARE)) {
+
+          top_rated_fuzz_p2 = 0;  // Skip the fuzz_p2 comparison
+
+        } else if (unlikely(afl->schedule == RARE)) {
+
           top_rated_fuzz_p2 =
               next_pow2(afl->n_fuzz[afl->top_rated[i]->n_fuzz_entry]);
-        else
+
+        } else {
+
           top_rated_fuzz_p2 = afl->top_rated[i]->fuzz_level;
+
+        }
 
         if (unlikely(afl->schedule >= RARE) || unlikely(afl->fixed_seed)) {
 
@@ -671,30 +776,9 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
 
         }
 
-        if (fuzz_p2 > top_rated_fuzz_p2) {
+        if (likely(fuzz_p2 > top_rated_fuzz_p2)) { continue; }
 
-          continue;
-
-        } else if (fuzz_p2 == top_rated_fuzz_p2) {
-
-          if (fav_factor > top_rated_fav_factor) { continue; }
-
-        }
-
-        if (unlikely(afl->schedule >= RARE) || unlikely(afl->fixed_seed)) {
-
-          if (fav_factor > afl->top_rated[i]->len << 2) { continue; }
-
-        } else {
-
-          if (fav_factor >
-              afl->top_rated[i]->exec_us * afl->top_rated[i]->len) {
-
-            continue;
-
-          }
-
-        }
+        if (likely(fav_factor > top_rated_fav_factor)) { continue; }
 
         /* Looks like we're going to win. Decrease ref count for the
            previous winner, discard its afl->fsrv.trace_bits[] if necessary. */
@@ -716,7 +800,7 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
       if (!q->trace_mini) {
 
         u32 len = (afl->fsrv.map_size >> 3);
-        q->trace_mini = ck_alloc(len);
+        q->trace_mini = (u8 *)ck_alloc(len);
         minimize_bits(afl, q->trace_mini, afl->fsrv.trace_bits);
 
       }
@@ -759,6 +843,8 @@ void cull_queue(afl_state_t *afl) {
   /* Let's see if anything in the bitmap isn't captured in temp_v.
      If yes, and if it has a afl->top_rated[] contender, let's use it. */
 
+  afl->smallest_favored = -1;
+
   for (i = 0; i < afl->fsrv.map_size; ++i) {
 
     if (afl->top_rated[i] && (temp_v[i >> 3] & (1 << (i & 7)))) {
@@ -782,7 +868,16 @@ void cull_queue(afl_state_t *afl) {
         afl->top_rated[i]->favored = 1;
         ++afl->queued_favored;
 
-        if (!afl->top_rated[i]->was_fuzzed) { ++afl->pending_favored; }
+        if (!afl->top_rated[i]->was_fuzzed) {
+
+          ++afl->pending_favored;
+          if (unlikely(afl->smallest_favored < 0)) {
+
+            afl->smallest_favored = (s64)afl->top_rated[i]->id;
+
+          }
+
+        }
 
       }
 
@@ -799,6 +894,8 @@ void cull_queue(afl_state_t *afl) {
     }
 
   }
+
+  afl->reinit_table = 1;
 
 }
 
@@ -1019,10 +1116,16 @@ u32 calculate_score(afl_state_t *afl, struct queue_entry *q) {
       break;
 
     case LIN:
+      // Don't modify perf_score for unfuzzed seeds
+      if (!q->fuzz_level) break;
+
       factor = q->fuzz_level / (afl->n_fuzz[q->n_fuzz_entry] + 1);
       break;
 
     case QUAD:
+      // Don't modify perf_score for unfuzzed seeds
+      if (!q->fuzz_level) break;
+
       factor =
           q->fuzz_level * q->fuzz_level / (afl->n_fuzz[q->n_fuzz_entry] + 1);
       break;
@@ -1102,19 +1205,19 @@ inline void queue_testcase_retake(afl_state_t *afl, struct queue_entry *q,
     if (len != old_len) {
 
       afl->q_testcase_cache_size = afl->q_testcase_cache_size + len - old_len;
-      q->testcase_buf = realloc(q->testcase_buf, len);
+      q->testcase_buf = (u8 *)realloc(q->testcase_buf, len);
 
       if (unlikely(!q->testcase_buf)) {
 
-        PFATAL("Unable to malloc '%s' with len %u", q->fname, len);
+        PFATAL("Unable to malloc '%s' with len %u", (char *)q->fname, len);
 
       }
 
     }
 
-    int fd = open(q->fname, O_RDONLY);
+    int fd = open((char *)q->fname, O_RDONLY);
 
-    if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", q->fname); }
+    if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", (char *)q->fname); }
 
     ck_read(fd, q->testcase_buf, len, q->fname);
     close(fd);
@@ -1134,7 +1237,7 @@ inline void queue_testcase_retake_mem(afl_state_t *afl, struct queue_entry *q,
 
     if (likely(len != old_len)) {
 
-      u8 *ptr = realloc(q->testcase_buf, len);
+      u8 *ptr = (u8 *)realloc(q->testcase_buf, len);
 
       if (likely(ptr)) {
 
@@ -1166,23 +1269,23 @@ inline u8 *queue_testcase_get(afl_state_t *afl, struct queue_entry *q) {
 
     if (unlikely(q == afl->queue_cur)) {
 
-      buf = afl_realloc((void **)&afl->testcase_buf, len);
+      buf = (u8 *)afl_realloc((void **)&afl->testcase_buf, len);
 
     } else {
 
-      buf = afl_realloc((void **)&afl->splicecase_buf, len);
+      buf = (u8 *)afl_realloc((void **)&afl->splicecase_buf, len);
 
     }
 
     if (unlikely(!buf)) {
 
-      PFATAL("Unable to malloc '%s' with len %u", q->fname, len);
+      PFATAL("Unable to malloc '%s' with len %u", (char *)q->fname, len);
 
     }
 
-    int fd = open(q->fname, O_RDONLY);
+    int fd = open((char *)q->fname, O_RDONLY);
 
-    if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", q->fname); }
+    if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", (char *)q->fname); }
 
     ck_read(fd, buf, len, q->fname);
     close(fd);
@@ -1226,7 +1329,7 @@ inline u8 *queue_testcase_get(afl_state_t *afl, struct queue_entry *q) {
 
         do_once = 1;
         // release unneeded memory
-        afl->q_testcase_cache = ck_realloc(
+        afl->q_testcase_cache = (struct queue_entry **)ck_realloc(
             afl->q_testcase_cache,
             (afl->q_testcase_max_cache_entries + 1) * sizeof(size_t));
 
@@ -1273,15 +1376,15 @@ inline u8 *queue_testcase_get(afl_state_t *afl, struct queue_entry *q) {
 
     /* Map the test case into memory. */
 
-    int fd = open(q->fname, O_RDONLY);
+    int fd = open((char *)q->fname, O_RDONLY);
 
-    if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", q->fname); }
+    if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", (char *)q->fname); }
 
-    q->testcase_buf = malloc(len);
+    q->testcase_buf = (u8 *)malloc(len);
 
     if (unlikely(!q->testcase_buf)) {
 
-      PFATAL("Unable to malloc '%s' with len %u", q->fname, len);
+      PFATAL("Unable to malloc '%s' with len %u", (char *)q->fname, len);
 
     }
 
@@ -1344,11 +1447,11 @@ inline void queue_testcase_store_mem(afl_state_t *afl, struct queue_entry *q,
 
   /* Map the test case into memory. */
 
-  q->testcase_buf = malloc(len);
+  q->testcase_buf = (u8 *)malloc(len);
 
   if (unlikely(!q->testcase_buf)) {
 
-    PFATAL("Unable to malloc '%s' with len %u", q->fname, len);
+    PFATAL("Unable to malloc '%s' with len %u", (char *)q->fname, len);
 
   }
 
