@@ -334,7 +334,7 @@ u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len) {
     }
 
     sprintf(ret + strlen(ret), ",time:%llu,execs:%llu",
-            get_cur_time() + afl->prev_run_time - afl->start_time,
+            get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "bitmap 337") + afl->prev_run_time - afl->start_time,
             afl->fsrv.total_execs);
 
     if (afl->current_custom_fuzz &&

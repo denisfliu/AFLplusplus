@@ -94,7 +94,7 @@ static u32 measure_preemption(u32 target_ms) {
   u64 st_t, en_t, st_c, en_c, real_delta, slice_delta;
   // s32 loop_repeats = 0;
 
-  st_t = get_cur_time_us();
+  st_t = get_replayable_time_us(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-gotcpu 97");
   st_c = get_cpu_usage_us();
 
 repeat_loop:
@@ -109,7 +109,7 @@ repeat_loop:
 
   sched_yield();
 
-  en_t = get_cur_time_us();
+  en_t = get_replayable_time_us(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-gotcpu 112");
 
   if (en_t - st_t < target_ms * 1000) {
 

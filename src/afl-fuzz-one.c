@@ -403,7 +403,7 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
     u8 time_tmp[64];
 
-    u_simplestring_time_diff(time_tmp, afl->prev_run_time + get_cur_time(),
+    u_simplestring_time_diff(time_tmp, afl->prev_run_time + get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-one 406"),
                              afl->start_time);
     ACTF(
         "Fuzzing test case #%u (%u total, %llu crashes saved, state: %s, "

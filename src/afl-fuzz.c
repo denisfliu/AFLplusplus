@@ -2138,7 +2138,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   if (afl->shmem_testcase_mode) { setup_testcase_shmem(afl); }
 
-  afl->start_time = get_cur_time();
+  afl->start_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz 2141");
 
   if (afl->fsrv.qemu_mode) {
 
@@ -2451,7 +2451,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   if (unlikely(afl->old_seed_selection)) seek_to = find_start_position(afl);
 
-  afl->start_time = get_cur_time();
+  afl->start_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz 2454");
   if (afl->in_place_resume || afl->afl_env.afl_autoresume) {
 
     load_stats_file(afl);
@@ -2475,7 +2475,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   // (void)nice(-20);  // does not improve the speed
   // real start time, we reset, so this works correctly with -V
-  afl->start_time = get_cur_time();
+  afl->start_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz 2478");
 
   #ifdef INTROSPECTION
   u32 prev_saved_crashes = 0, prev_saved_tmouts = 0;
@@ -2583,7 +2583,7 @@ int main(int argc, char **argv_orig, char **envp) {
          recombination strategies next. */
 
       if (unlikely(afl->queued_items == prev_queued
-                   /* FIXME TODO BUG: && (get_cur_time() - afl->start_time) >=
+                   /* FIXME TODO BUG: && (get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz 2586") - afl->start_time) >=
                       3600 */
                    )) {
 
@@ -2659,7 +2659,7 @@ int main(int argc, char **argv_orig, char **envp) {
   #ifdef INTROSPECTION
       {
 
-        u64 cur_time = get_cur_time();
+        u64 cur_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz 2662");
         fprintf(afl->introspection_file,
                 "CYCLE cycle=%llu cycle_wo_finds=%llu time_wo_finds=%llu "
                 "expand_havoc=%u queue=%u\n",
