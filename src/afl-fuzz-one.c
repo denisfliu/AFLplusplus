@@ -2318,7 +2318,7 @@ havoc_stage:
           snprintf(afl->m_tmp, sizeof(afl->m_tmp), " INTERESTING32BE_%u", item);
           strcat(afl->mutation, afl->m_tmp);
 #endif
-          *(u32 *)(out_buf + rand_below(afl, temp_len - 3), "afl-fuzz-one 2231") =
+          *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 2231")) =
               SWAP32(interesting_32[item]);
 
           break;

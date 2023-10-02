@@ -2841,7 +2841,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
 
-    u64 cur_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2559")
+    u64 cur_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "fuzz 2559");
 
     if (likely(afl->switch_fuzz_mode && afl->fuzz_mode == 0 &&
                !afl->non_instrumented_mode) &&

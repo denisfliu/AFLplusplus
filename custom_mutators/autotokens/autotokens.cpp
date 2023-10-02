@@ -202,9 +202,9 @@ static void first_run(void *data) {
 
 static u32 good_whitespace_or_singleval() {
 
-  u32 i = rand_below(afl_ptr, current_id);
+  u32 i = rand_below(afl_ptr, current_id, "autotokens 205");
   if (id_to_token[i].size() == 1) { return i; }
-  i = rand_below(afl_ptr, all_ws);
+  i = rand_below(afl_ptr, all_ws, "autotokens 207");
   if (i < all_spaces) {
 
     return 0;
@@ -270,16 +270,16 @@ extern "C" size_t afl_custom_fuzz(my_mutator_t *data, u8 *buf, size_t buf_size,
 
   for (i = 0; i < rounds; ++i) {
 
-    switch (rand_below(afl_ptr, max_rand)) {
+    switch (rand_below(afl_ptr, max_rand, "autotokens 273")) {
 
       /* CHANGE/MUTATE single item */
       case 0 ... 9: {
 
-        pos = rand_below(afl_ptr, m_size);
+        pos = rand_below(afl_ptr, m_size, "autotokens 278");
         u32 cur_item = m[pos];
         do {
 
-          new_item = rand_below(afl_ptr, current_id);
+          new_item = rand_below(afl_ptr, current_id, "autotokens 282");
 
         } while (unlikely(
 
@@ -298,11 +298,11 @@ extern "C" size_t afl_custom_fuzz(my_mutator_t *data, u8 *buf, size_t buf_size,
 
         do {
 
-          new_item = rand_below(afl_ptr, current_id);
+          new_item = rand_below(afl_ptr, current_id, "autotokens 301");
 
         } while (unlikely(new_item >= whitespace_ids));
 
-        u32 pos = rand_below(afl_ptr, m_size + 1);
+        u32 pos = rand_below(afl_ptr, m_size + 1, "autotokens 305");
         m.insert(m.begin() + pos, new_item);
         ++m_size;
         // DEBUGF(stderr, "INS: %u at %u\n", new_item, pos);
@@ -315,10 +315,10 @@ extern "C" size_t afl_custom_fuzz(my_mutator_t *data, u8 *buf, size_t buf_size,
       /* SPLICING */
       case 14 ... 22: {
 
-        u32  strategy = rand_below(afl_ptr, 4), dst_off, n;
-        auto src = id_mapping[rand_below(afl_ptr, valid_structures)];
+        u32  strategy = rand_below(afl_ptr, 4, "autotokens 318"), dst_off, n;
+        auto src = id_mapping[rand_below(afl_ptr, valid_structures, "autotokens 319")];
         u32  src_size = src->size();
-        u32  src_off = rand_below(afl_ptr, src_size - AUTOTOKENS_SPLICE_MIN);
+        u32  src_off = rand_below(afl_ptr, src_size - AUTOTOKENS_SPLICE_MIN, "autotokens 321");
         u32  rand_r = 1 + MAX(AUTOTOKENS_SPLICE_MIN,
                               MIN(AUTOTOKENS_SPLICE_MAX, src_size - src_off));
 
@@ -327,10 +327,10 @@ extern "C" size_t afl_custom_fuzz(my_mutator_t *data, u8 *buf, size_t buf_size,
           // insert
           case 0: {
 
-            dst_off = rand_below(afl_ptr, m_size);
+            dst_off = rand_below(afl_ptr, m_size, "autotokens 330");
             n = AUTOTOKENS_SPLICE_MIN +
                 rand_below(afl_ptr, MIN(AUTOTOKENS_SPLICE_MAX,
-                                        rand_r - AUTOTOKENS_SPLICE_MIN));
+                                        rand_r - AUTOTOKENS_SPLICE_MIN), "autotokens 333");
             m.insert(m.begin() + dst_off, src->begin() + src_off,
                      src->begin() + src_off + n);
             m_size += n;
@@ -343,13 +343,13 @@ extern "C" size_t afl_custom_fuzz(my_mutator_t *data, u8 *buf, size_t buf_size,
           // overwrite
           default: {
 
-            dst_off = rand_below(afl_ptr, m_size - AUTOTOKENS_SPLICE_MIN);
+            dst_off = rand_below(afl_ptr, m_size - AUTOTOKENS_SPLICE_MIN, "autotokens 346");
             n = AUTOTOKENS_SPLICE_MIN +
                 rand_below(
                     afl_ptr,
                     MIN(AUTOTOKENS_SPLICE_MAX - AUTOTOKENS_SPLICE_MIN,
                         MIN(m_size - dst_off - AUTOTOKENS_SPLICE_MIN,
-                            src_size - src_off - AUTOTOKENS_SPLICE_MIN)));
+                            src_size - src_off - AUTOTOKENS_SPLICE_MIN)), "autotokens 352");
 
             copy(src->begin() + src_off, src->begin() + src_off + n,
                  m.begin() + dst_off);
@@ -374,7 +374,7 @@ extern "C" size_t afl_custom_fuzz(my_mutator_t *data, u8 *buf, size_t buf_size,
 
           do {
 
-            pos = rand_below(afl_ptr, m_size);
+            pos = rand_below(afl_ptr, m_size, "autotokens 377");
 
           } while (unlikely(m[pos] < whitespace_ids));
 
@@ -661,7 +661,7 @@ extern "C" unsigned char afl_custom_queue_get(void                *data,
       structure->reserve(cnt + 4);
       for (u32 i = 0; i < cnt; i++) {
 
-        item = rand_below(afl_ptr, current_id);
+        item = rand_below(afl_ptr, current_id, "autotokens 664");
         if (i && id_to_token[item].length() > 1 &&
             id_to_token[prev].length() > 1) {
 
