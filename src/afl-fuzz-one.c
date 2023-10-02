@@ -2300,7 +2300,7 @@ havoc_stage:
           strcat(afl->mutation, afl->m_tmp);
 #endif
 
-          *(u32 *)(out_buf + rand_below(afl, temp_len - 3), "afl-fuzz-one 2303") =
+          *(u32 *)(out_buf + rand_below(afl, temp_len - 3, "afl-fuzz-one 2303")) =
               interesting_32[item];
 
           break;
