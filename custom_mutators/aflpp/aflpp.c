@@ -60,7 +60,7 @@ size_t afl_custom_fuzz(my_mutator_t *data, uint8_t *buf, size_t buf_size,
 
   }
 
-  u32 havoc_steps = 1 + rand_below(data->afl, 16);
+  u32 havoc_steps = 1 + rand_below(data->afl, 16, "aflpp 63");
 
   /* set everything up, costly ... :( */
   memcpy(data->buf, buf, buf_size);

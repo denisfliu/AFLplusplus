@@ -1756,7 +1756,7 @@ inline u32 choose_block_len(afl_state_t *afl, u32 limit) {
 
   if (unlikely(!afl->run_over10m)) { rlim = 1; }
 
-  switch (rand_below(afl, rlim)) {
+  switch (rand_below(afl, rlim, "afl mutations 1")) {
 
     case 0:
       min_value = 1;
@@ -1770,7 +1770,7 @@ inline u32 choose_block_len(afl_state_t *afl, u32 limit) {
 
     default:
 
-      if (likely(rand_below(afl, 10))) {
+      if (likely(rand_below(afl, 10, "afl mutations 2"))) {
 
         min_value = HAVOC_BLK_MEDIUM;
         max_value = HAVOC_BLK_LARGE;
@@ -1786,7 +1786,7 @@ inline u32 choose_block_len(afl_state_t *afl, u32 limit) {
 
   if (min_value >= limit) { min_value = 1; }
 
-  return min_value + rand_below(afl, MIN(max_value, limit) - min_value + 1);
+  return min_value + rand_below(afl, MIN(max_value, limit) - min_value + 1, "afl mutations 3");
 
 }
 
@@ -1856,15 +1856,15 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
   retry_havoc_step : {
 
-    u32 r = rand_below(afl, MUT_STRATEGY_ARRAY_SIZE), item;
+    u32 r = rand_below(afl, MUT_STRATEGY_ARRAY_SIZE, "afl mutations 4"), item;
 
     switch (mutation_array[r]) {
 
       case MUT_FLIPBIT: {
 
         /* Flip a single bit somewhere. Spooky! */
-        u8  bit = rand_below(afl, 8);
-        u32 off = rand_below(afl, len);
+        u8  bit = rand_below(afl, 8, "afl mutations 5");
+        u32 off = rand_below(afl, len, "afl mutations 6");
         buf[off] ^= 1 << bit;
 
         break;
@@ -1875,8 +1875,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Set byte to interesting value. */
 
-        item = rand_below(afl, sizeof(interesting_8));
-        buf[rand_below(afl, len)] = interesting_8[item];
+        item = rand_below(afl, sizeof(interesting_8), "afl mutations 7");
+        buf[rand_below(afl, len, "afl mutations 8")] = interesting_8[item];
         break;
 
       }
@@ -1887,8 +1887,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 2)) { break; }  // no retry
 
-        item = rand_below(afl, sizeof(interesting_16) >> 1);
-        *(u16 *)(buf + rand_below(afl, len - 1)) = interesting_16[item];
+        item = rand_below(afl, sizeof(interesting_16) >> 1, "afl mutations 9");
+        *(u16 *)(buf + rand_below(afl, len - 1, "afl mutations 10")) = interesting_16[item];
 
         break;
 
@@ -1900,8 +1900,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 2)) { break; }  // no retry
 
-        item = rand_below(afl, sizeof(interesting_16) >> 1);
-        *(u16 *)(buf + rand_below(afl, len - 1)) = SWAP16(interesting_16[item]);
+        item = rand_below(afl, sizeof(interesting_16) >> 1, "afl mutations 11");
+        *(u16 *)(buf + rand_below(afl, len - 1, "afl mutations 12")) = SWAP16(interesting_16[item]);
 
         break;
 
@@ -1913,8 +1913,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        item = rand_below(afl, sizeof(interesting_32) >> 2);
-        *(u32 *)(buf + rand_below(afl, len - 3)) = interesting_32[item];
+        item = rand_below(afl, sizeof(interesting_32) >> 2, "afl mutations 13");
+        *(u32 *)(buf + rand_below(afl, len - 3, "afl mutations 14")) = interesting_32[item];
 
         break;
 
@@ -1926,8 +1926,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        item = rand_below(afl, sizeof(interesting_32) >> 2);
-        *(u32 *)(buf + rand_below(afl, len - 3)) = SWAP32(interesting_32[item]);
+        item = rand_below(afl, sizeof(interesting_32) >> 2, "afl mutations 15");
+        *(u32 *)(buf + rand_below(afl, len - 3, "afl mutations 16")) = SWAP32(interesting_32[item]);
 
         break;
 
@@ -1937,8 +1937,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Randomly subtract from byte. */
 
-        item = 1 + rand_below(afl, ARITH_MAX);
-        buf[rand_below(afl, len)] -= item;
+        item = 1 + rand_below(afl, ARITH_MAX, "afl mutations 17");
+        buf[rand_below(afl, len, "afl mutations 18")] -= item;
         break;
 
       }
@@ -1947,8 +1947,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Randomly add to byte. */
 
-        item = 1 + rand_below(afl, ARITH_MAX);
-        buf[rand_below(afl, len)] += item;
+        item = 1 + rand_below(afl, ARITH_MAX, "afl mutations 19");
+        buf[rand_below(afl, len, "afl mutations 20")] += item;
         break;
 
       }
@@ -1959,8 +1959,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 2)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 1);
-        item = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 1, "afl mutations 21");
+        item = 1 + rand_below(afl, ARITH_MAX, "afl mutations 22");
         *(u16 *)(buf + pos) -= item;
 
         break;
@@ -1973,8 +1973,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 2)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 1);
-        u16 num = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 1, "afl mutations 23");
+        u16 num = 1 + rand_below(afl, ARITH_MAX, "afl mutations 24");
         *(u16 *)(buf + pos) = SWAP16(SWAP16(*(u16 *)(buf + pos)) - num);
 
         break;
@@ -1987,8 +1987,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 2)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 1);
-        item = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 1, "afl mutations 25");
+        item = 1 + rand_below(afl, ARITH_MAX, "afl mutations 26");
         *(u16 *)(buf + pos) += item;
 
         break;
@@ -2001,8 +2001,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 2)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 1);
-        u16 num = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 1, "afl mutations 27");
+        u16 num = 1 + rand_below(afl, ARITH_MAX, "afl mutations 28");
         *(u16 *)(buf + pos) = SWAP16(SWAP16(*(u16 *)(buf + pos)) + num);
 
         break;
@@ -2015,8 +2015,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 3);
-        item = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 3, "afl mutations 29");
+        item = 1 + rand_below(afl, ARITH_MAX, "afl mutations 30");
         *(u32 *)(buf + pos) -= item;
 
         break;
@@ -2029,8 +2029,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 3);
-        u32 num = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 3, "afl mutations 31");
+        u32 num = 1 + rand_below(afl, ARITH_MAX, "afl mutations 32");
         *(u32 *)(buf + pos) = SWAP32(SWAP32(*(u32 *)(buf + pos)) - num);
 
         break;
@@ -2043,8 +2043,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 3);
-        item = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 3, "afl mutations 33");
+        item = 1 + rand_below(afl, ARITH_MAX, "afl mutations 34");
         *(u32 *)(buf + pos) += item;
 
         break;
@@ -2057,8 +2057,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        u32 pos = rand_below(afl, len - 3);
-        u32 num = 1 + rand_below(afl, ARITH_MAX);
+        u32 pos = rand_below(afl, len - 3, "afl mutations 35");
+        u32 num = 1 + rand_below(afl, ARITH_MAX, "afl mutations 36");
         *(u32 *)(buf + pos) = SWAP32(SWAP32(*(u32 *)(buf + pos)) + num);
 
         break;
@@ -2071,8 +2071,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
            why not. We use XOR with 1-255 to eliminate the
            possibility of a no-op. */
 
-        u32 pos = rand_below(afl, len);
-        item = 1 + rand_below(afl, 255);
+        u32 pos = rand_below(afl, len, "afl mutations 37");
+        item = 1 + rand_below(afl, 255, "afl mutations 38");
         buf[pos] ^= item;
         break;
 
@@ -2085,8 +2085,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
           /* Clone bytes. */
 
           u32 clone_len = choose_block_len(afl, len);
-          u32 clone_from = rand_below(afl, len - clone_len + 1);
-          u32 clone_to = rand_below(afl, len);
+          u32 clone_from = rand_below(afl, len - clone_len + 1, "afl mutations 39");
+          u32 clone_to = rand_below(afl, len, "afl mutations 40");
 
           /* Head */
 
@@ -2124,10 +2124,10 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
           /* Insert a block of constant bytes (25%). */
 
           u32 clone_len = choose_block_len(afl, HAVOC_BLK_XL);
-          u32 clone_to = rand_below(afl, len);
-          u32 strat = rand_below(afl, 2);
+          u32 clone_to = rand_below(afl, len, "afl mutations 41");
+          u32 strat = rand_below(afl, 2, "afl mutations 42");
           u32 clone_from = clone_to ? clone_to - 1 : 0;
-          item = strat ? rand_below(afl, 256) : buf[clone_from];
+          item = strat ? rand_below(afl, 256, "afl mutations 43") : buf[clone_from];
 
           /* Head */
 
@@ -2165,8 +2165,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         if (unlikely(len < 2)) { break; }  // no retry
 
         u32 copy_len = choose_block_len(afl, len - 1);
-        u32 copy_from = rand_below(afl, len - copy_len + 1);
-        u32 copy_to = rand_below(afl, len - copy_len + 1);
+        u32 copy_from = rand_below(afl, len - copy_len + 1, "afl mutations 44");
+        u32 copy_to = rand_below(afl, len - copy_len + 1, "afl mutations 45");
 
         if (likely(copy_from != copy_to)) {
 
@@ -2185,10 +2185,10 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         if (unlikely(len < 2)) { break; }  // no retry
 
         u32 copy_len = choose_block_len(afl, len - 1);
-        u32 copy_to = rand_below(afl, len - copy_len + 1);
-        u32 strat = rand_below(afl, 2);
+        u32 copy_to = rand_below(afl, len - copy_len + 1, "afl mutations 46");
+        u32 strat = rand_below(afl, 2, "afl mutations 47");
         u32 copy_from = copy_to ? copy_to - 1 : 0;
-        item = strat ? rand_below(afl, 256) : buf[copy_from];
+        item = strat ? rand_below(afl, 256, "afl mutations 48") : buf[copy_from];
         memset(buf + copy_to, item, copy_len);
 
         break;
@@ -2199,7 +2199,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Increase byte by 1. */
 
-        buf[rand_below(afl, len)]++;
+        buf[rand_below(afl, len, "afl mutations 49")]++;
         break;
 
       }
@@ -2208,7 +2208,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Decrease byte by 1. */
 
-        buf[rand_below(afl, len)]--;
+        buf[rand_below(afl, len, "afl mutations 50")]--;
         break;
 
       }
@@ -2217,7 +2217,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Flip byte. */
 
-        buf[rand_below(afl, len)] ^= 0xff;
+        buf[rand_below(afl, len, "afl mutations 51")] ^= 0xff;
         break;
 
       }
@@ -2229,10 +2229,10 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         /* Switch bytes. */
 
         u32 to_end, switch_to, switch_len, switch_from;
-        switch_from = rand_below(afl, len);
+        switch_from = rand_below(afl, len, "afl mutations 52");
         do {
 
-          switch_to = rand_below(afl, len);
+          switch_to = rand_below(afl, len, "afl mutations 53");
 
         } while (unlikely(switch_from == switch_to));
 
@@ -2275,7 +2275,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         /* Don't delete too much. */
 
         u32 del_len = choose_block_len(afl, len - 1);
-        u32 del_from = rand_below(afl, len - del_len + 1);
+        u32 del_from = rand_below(afl, len - del_len + 1, "afl mutations 54");
         memmove(buf + del_from, buf + del_from + del_len,
                 len - del_from - del_len);
         len -= del_len;
@@ -2291,14 +2291,14 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         if (unlikely(len < 4)) { break; }  // no retry
 
         u32 blen = choose_block_len(afl, len - 1);
-        u32 off = rand_below(afl, len - blen + 1);
+        u32 off = rand_below(afl, len - blen + 1, "afl mutations 55");
 
         for (u32 i = blen - 1; i > 0; i--) {
 
           u32 j;
           do {
 
-            j = rand_below(afl, i + 1);
+            j = rand_below(afl, i + 1, "afl mutations 56");
 
           } while (unlikely(i == j));
 
@@ -2321,7 +2321,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         /* Don't delete too much. */
 
         u32 del_len = 1;
-        u32 del_from = rand_below(afl, len - del_len + 1);
+        u32 del_from = rand_below(afl, len - del_len + 1, "afl mutations 57");
         memmove(buf + del_from, buf + del_from + del_len,
                 len - del_from - del_len);
 
@@ -2336,10 +2336,10 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         if (unlikely(len < 2)) { break; }  // no retry
 
         u32 clone_len = 1;
-        u32 clone_to = rand_below(afl, len);
-        u32 strat = rand_below(afl, 2);
+        u32 clone_to = rand_below(afl, len, "afl mutations 58");
+        u32 strat = rand_below(afl, 2, "afl mutations 59");
         u32 clone_from = clone_to ? clone_to - 1 : 0;
-        item = strat ? rand_below(afl, 256) : buf[clone_from];
+        item = strat ? rand_below(afl, 256, "afl mutations 60") : buf[clone_from];
 
         /* Head */
 
@@ -2363,7 +2363,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(len < 4)) { break; }  // no retry
 
-        u32 off = rand_below(afl, len), off2 = off, cnt = 0;
+        u32 off = rand_below(afl, len, "afl mutations 61"), off2 = off, cnt = 0;
 
         while (off2 + cnt < len && !isdigit(buf[off2 + cnt])) {
 
@@ -2417,7 +2417,7 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (off && buf[off - 1] == '-') { val = -val; }
 
-        u32 strat = rand_below(afl, 8);
+        u32 strat = rand_below(afl, 8, "afl mutations 62");
         switch (strat) {
 
           case 0:
@@ -2439,16 +2439,16 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
             } else {
 
-              val = rand_below(afl, 256);
+              val = rand_below(afl, 256, "afl mutations 63");
 
             }
 
             break;
           case 5:
-            val += rand_below(afl, 256);
+            val += rand_below(afl, 256, "afl mutations 64");
             break;
           case 6:
-            val -= rand_below(afl, 256);
+            val -= rand_below(afl, 256, "afl mutations 65");
             break;
           case 7:
             val = ~(val);
@@ -2490,8 +2490,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
       case MUT_INSERTASCIINUM: {
 
-        u32 len = 1 + rand_below(afl, 8);
-        u32 pos = rand_below(afl, len);
+        u32 len = 1 + rand_below(afl, 8, "afl mutations 66");
+        u32 pos = rand_below(afl, len, "afl mutations 67");
 
         /* Insert ascii number. */
         if (unlikely(len < pos + len)) {
@@ -2523,12 +2523,12 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Use the dictionary. */
 
-        u32 use_extra = rand_below(afl, afl->extras_cnt);
+        u32 use_extra = rand_below(afl, afl->extras_cnt, "afl mutations 68");
         u32 extra_len = afl->extras[use_extra].len;
 
         if (unlikely(extra_len > len)) { goto retry_havoc_step; }
 
-        u32 insert_at = rand_below(afl, len - extra_len + 1);
+        u32 insert_at = rand_below(afl, len - extra_len + 1, "afl mutations 69");
         memcpy(buf + insert_at, afl->extras[use_extra].data, extra_len);
 
         break;
@@ -2539,12 +2539,12 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(!afl->extras_cnt)) { goto retry_havoc_step; }
 
-        u32 use_extra = rand_below(afl, afl->extras_cnt);
+        u32 use_extra = rand_below(afl, afl->extras_cnt, "afl mutations 70");
         u32 extra_len = afl->extras[use_extra].len;
         if (unlikely(len + extra_len >= max_len)) { goto retry_havoc_step; }
 
         u8 *ptr = afl->extras[use_extra].data;
-        u32 insert_at = rand_below(afl, len + 1);
+        u32 insert_at = rand_below(afl, len + 1, "afl mutations 71");
 
         /* Tail */
         memmove(buf + insert_at + extra_len, buf + insert_at, len - insert_at);
@@ -2563,12 +2563,12 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         /* Use the dictionary. */
 
-        u32 use_extra = rand_below(afl, afl->a_extras_cnt);
+        u32 use_extra = rand_below(afl, afl->a_extras_cnt, "afl mutations 72");
         u32 extra_len = afl->a_extras[use_extra].len;
 
         if (unlikely(extra_len > len)) { goto retry_havoc_step; }
 
-        u32 insert_at = rand_below(afl, len - extra_len + 1);
+        u32 insert_at = rand_below(afl, len - extra_len + 1, "afl mutations 73");
         memcpy(buf + insert_at, afl->a_extras[use_extra].data, extra_len);
 
         break;
@@ -2579,12 +2579,12 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (unlikely(!afl->a_extras_cnt)) { goto retry_havoc_step; }
 
-        u32 use_extra = rand_below(afl, afl->a_extras_cnt);
+        u32 use_extra = rand_below(afl, afl->a_extras_cnt, "afl mutations 74");
         u32 extra_len = afl->a_extras[use_extra].len;
         if (unlikely(len + extra_len >= max_len)) { goto retry_havoc_step; }
 
         u8 *ptr = afl->a_extras[use_extra].data;
-        u32 insert_at = rand_below(afl, len + 1);
+        u32 insert_at = rand_below(afl, len + 1, "afl mutations 75");
 
         /* Tail */
         memmove(buf + insert_at + extra_len, buf + insert_at, len - insert_at);
@@ -2609,8 +2609,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
 
         if (copy_len > len) copy_len = len;
 
-        copy_from = rand_below(afl, splice_len - copy_len + 1);
-        copy_to = rand_below(afl, len - copy_len + 1);
+        copy_from = rand_below(afl, splice_len - copy_len + 1, "afl mutations 76");
+        copy_to = rand_below(afl, len - copy_len + 1, "afl mutations 77");
         memmove(buf + copy_to, splice_buf + copy_from, copy_len);
 
         break;
@@ -2628,8 +2628,8 @@ inline u32 afl_mutate(afl_state_t *afl, u8 *buf, u32 len, u32 steps,
         u32 clone_from, clone_to, clone_len;
 
         clone_len = choose_block_len(afl, splice_len);
-        clone_from = rand_below(afl, splice_len - clone_len + 1);
-        clone_to = rand_below(afl, len + 1);
+        clone_from = rand_below(afl, splice_len - clone_len + 1, "afl mutations 78");
+        clone_to = rand_below(afl, len + 1, "afl mutations 79");
 
         /* Head */
 

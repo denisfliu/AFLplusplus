@@ -1173,7 +1173,7 @@ void perform_dry_run(afl_state_t *afl) {
           ck_write(fd, use_mem, read_len, crash_fn);
           close(fd);
 
-          afl->last_crash_time = get_cur_time();
+          afl->last_crash_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-init 1176");
           afl->last_crash_execs = afl->fsrv.total_execs;
 
         } else {

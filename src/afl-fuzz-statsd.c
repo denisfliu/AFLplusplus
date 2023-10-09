@@ -238,7 +238,7 @@ int statsd_format_metric(afl_state_t *afl, char *buff, size_t bufflen) {
         afl->queue_cycle ? (afl->queue_cycle - 1) : 0, tags,
         afl->cycles_wo_finds, tags, afl->fsrv.total_execs, tags,
         afl->fsrv.total_execs /
-            ((double)(get_cur_time() + afl->prev_run_time - afl->start_time) /
+            ((double)(get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-statsd 241") + afl->prev_run_time - afl->start_time) /
              1000),
         tags, afl->queued_items, tags, afl->queued_favored, tags,
         afl->queued_discovered, tags, afl->queued_imported, tags,
@@ -256,7 +256,7 @@ int statsd_format_metric(afl_state_t *afl, char *buff, size_t bufflen) {
         afl->queue_cycle ? (afl->queue_cycle - 1) : 0, tags,
         afl->cycles_wo_finds, tags, afl->fsrv.total_execs, tags,
         afl->fsrv.total_execs /
-            ((double)(get_cur_time() + afl->prev_run_time - afl->start_time) /
+            ((double)(get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-statsd 241") + afl->prev_run_time - afl->start_time) /
              1000),
         tags, afl->queued_items, tags, afl->queued_favored, tags,
         afl->queued_discovered, tags, afl->queued_imported, tags,

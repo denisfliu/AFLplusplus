@@ -32,7 +32,7 @@ static char fuzzing_state[4][12] = {"started :-)", "in progress", "final phase",
 
 char *get_fuzzing_state(afl_state_t *afl) {
 
-  u64 cur_ms = get_cur_time();
+  u64 cur_ms = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 35");
   u64 last_find = cur_ms - afl->last_find_time;
   u64 cur_run_time = cur_ms - afl->start_time;
   u64 cur_total_run_time = afl->prev_run_time + cur_run_time;
@@ -249,7 +249,7 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
   struct rusage rus;
 #endif
 
-  u64   cur_time = get_cur_time();
+  u64   cur_time = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 252");
   u8    fn[PATH_MAX];
   FILE *f;
 
@@ -343,7 +343,7 @@ void write_stats_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
                  : (cur_time - afl->last_find_time) / 1000),
       afl->fsrv.total_execs,
       afl->fsrv.total_execs /
-          ((double)(afl->prev_run_time + get_cur_time() - afl->start_time) /
+          ((double)(afl->prev_run_time + get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 346") - afl->start_time) /
            1000),
       afl->last_avg_execs_saved, afl->queued_items, afl->queued_favored,
       afl->queued_discovered, afl->queued_imported, afl->queued_variable,
@@ -465,7 +465,7 @@ void maybe_update_plot_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
                  afl->plot_prev_md == afl->max_depth &&
                  afl->plot_prev_ed == afl->fsrv.total_execs) ||
                 !afl->queue_cycle ||
-                get_cur_time() - afl->start_time <= 60000))) {
+                get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 468") - afl->start_time <= 60000))) {
 
     return;
 
@@ -490,7 +490,7 @@ void maybe_update_plot_file(afl_state_t *afl, u32 t_bytes, double bitmap_cvg,
   fprintf(afl->fsrv.plot_file,
           "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f, %llu, "
           "%u\n",
-          ((afl->prev_run_time + get_cur_time() - afl->start_time) / 1000),
+          ((afl->prev_run_time + get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 493") - afl->start_time) / 1000),
           afl->queue_cycle - 1, afl->current_entry, afl->queued_items,
           afl->pending_not_fuzzed, afl->pending_favored, bitmap_cvg,
           afl->saved_crashes, afl->saved_hangs, afl->max_depth, eps,
@@ -547,7 +547,7 @@ void show_stats_normal(afl_state_t *afl) {
   u8 val_buf[8][STRINGIFY_VAL_SIZE_MAX];
 #define IB(i) (val_buf[(i)])
 
-  cur_ms = get_cur_time();
+  cur_ms = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 550");
 
   if (afl->most_time_key) {
 
@@ -1355,7 +1355,7 @@ void show_stats_pizza(afl_state_t *afl) {
   u8 val_buf[8][STRINGIFY_VAL_SIZE_MAX];
 #define IB(i) (val_buf[(i)])
 
-  cur_ms = get_cur_time();
+  cur_ms = get_replayable_time(afl->fsrv.time_fd, afl->replay, afl->out_dir, "afl-fuzz-stats 1358");
 
   if (afl->most_time_key) {
 
