@@ -1235,7 +1235,7 @@ static inline u32 rand_below(afl_state_t *afl, u32 limit, u8 origin[]) {
      we need to ensure the result uniformity. */
   if (unlikely(!afl->rand_cnt--) && likely(!afl->fixed_seed)) {
 
-    if (false && unlikely(afl->replay)) {
+    if (unlikely(afl->replay)) {
       ck_read(afl->fsrv.rand_below_fd[1], &afl->rand_seed, sizeof(afl->rand_seed),
               "rand_below_thing");
     } else {
