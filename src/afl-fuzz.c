@@ -527,7 +527,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   // still available: HjJkKqruvwz
   while ((opt = getopt(argc, argv,
-                       "+a:Ab:B:c:CdDe:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRs:S:t:"
+                       "+a:Ab:B:c:CdDe:E:f:F:g:G:hi:I:l:L:m:M:nNo:Op:P:QRr:s:S:t:"
                        "T:UV:WXx:YZ")) > 0) {
 
     switch (opt) {
