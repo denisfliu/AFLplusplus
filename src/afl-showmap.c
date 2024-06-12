@@ -166,11 +166,12 @@ void update_bitmap_score(afl_state_t *afl, struct queue_entry *q) {
 }
 
 fsrv_run_result_t fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv,
-                                  u32 i) {
+                                  u32 i, u8 origin[]) {
 
   (void)afl;
   (void)fsrv;
   (void)i;
+  (void)origin;
   return 0;
 
 }
@@ -181,6 +182,15 @@ void classify_counts(afl_forkserver_t *fsrv) {
   const u8 *map = binary_mode ? count_class_binary : count_class_human;
 
   u32 i = map_size;
+
+  // BRANDEN DEBUGGING STUFF
+  /*
+	FILE *forkthing_debug;
+	forkthing_debug = fopen("/tmp/branden_debug.txt", "a");
+	fprintf(forkthing_debug, "classify_counts 189\n");
+	fclose(forkthing_debug);
+  // END OF BRANDEN DEBUGGING STUFF
+  */
 
   if (edges_only) {
 

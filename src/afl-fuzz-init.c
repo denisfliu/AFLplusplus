@@ -624,7 +624,7 @@ void read_foreign_testcases(afl_state_t *afl, int first) {
         }
 
         u32 len = write_to_testcase(afl, (void **)&mem, st.st_size, 1);
-        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout, "fuzz run target 627");
         afl->syncing_party = foreign_name;
         afl->queued_imported += save_if_interesting(afl, mem, len, fault);
         afl->syncing_party = 0;
@@ -1530,7 +1530,6 @@ u32 find_start_position(afl_state_t *afl) {
     fn = alloc_printf("%s/../fuzzer_stats", afl->in_dir);
 
   }
-
   fd = open(fn, O_RDONLY);
   ck_free(fn);
 

@@ -42,7 +42,7 @@ u64 time_spent_working = 0;
    information. The called program will update afl->fsrv->trace_bits. */
 
 fsrv_run_result_t __attribute__((hot))
-fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv, u32 timeout) {
+fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv, u32 timeout, u8 origin[]) {
 
 #ifdef PROFILING
   static u64      time_spent_start = 0;
@@ -64,6 +64,55 @@ fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv, u32 timeout) {
   clock_gettime(CLOCK_REALTIME, &spec);
   time_spent_start = (spec.tv_sec * 1000000000) + spec.tv_nsec;
 #endif
+
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf(f, "origin: %s\n", origin);
+        fprintf(f, "timeout: %u\n", timeout);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  // indicate that we're doing something spicy
+  const char *str1 = "replay_indicator_fsrv";
+  int trash = atoi(str1);
+  (void)trash;
+
+  // fault value interception
+  char str2[21];
+  sprintf(str2, "%d", res);
+  res = atoi(str2);
+
+
+  u8 *ptr = fsrv->trace_bits;
+  u32  i = (fsrv-> map_size >> 2);
+
+  while (i--) {
+    memset(str2, 0, sizeof(str2));
+    sprintf(str2, "%d", *(ptr));
+    *(ptr++) = (strtoul(str2, NULL, 10)); // this needs to be implemented in afl-debug
+  }
+
+    memset(str2, 0, sizeof(str2));
+    sprintf(str2, "%llu", fsrv->total_execs);
+    fsrv->total_execs = strtoull(str2, NULL, 10);
+
+    memset(str2, 0, sizeof(str2));
+    sprintf(str2, "%u", fsrv->last_run_timed_out);
+    fsrv->last_run_timed_out = strtoull(str2, NULL, 10);
+
+
+
+  // indicate that we're done with the stuff (note: need to fix the thing in afl-debug)
+  trash = atoi(str1);
+  (void)trash;
+
+  #endif
 
   return res;
 
@@ -269,6 +318,7 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
     u8 *new_buf = NULL;
     new_mem = mem_trimmed;
 
+    // macro that loops through each value in the passed list
     LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
 
       if (el->afl_custom_post_process) {
@@ -389,7 +439,7 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
   }
 
   if (afl->fsrv.use_stdin) {
-
+    
     if (ftruncate(fd, new_size)) { PFATAL("ftruncate() failed"); }
     lseek(fd, 0, SEEK_SET);
 
@@ -398,7 +448,6 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
     close(fd);
 
   }
-
 }
 
 /* Calibrate a new test case. This is done when processing the input directory
@@ -465,7 +514,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
     (void)write_to_testcase(afl, (void **)&use_mem, q->len, 1);
 
-    fault = fuzz_run_target(afl, &afl->fsrv, use_tmout);
+    fault = fuzz_run_target(afl, &afl->fsrv, use_tmout, "fuzz run target 482");
 
     /* afl->stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
@@ -507,7 +556,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
     (void)write_to_testcase(afl, (void **)&use_mem, q->len, 1);
 
-    fault = fuzz_run_target(afl, &afl->fsrv, use_tmout);
+    fault = fuzz_run_target(afl, &afl->fsrv, use_tmout, "fuzz run target 524");
 
     /* afl->stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
@@ -612,9 +661,9 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
     FILE *f = fopen(fn, "a");
     if (f) {
 
-        fprintf( f, "%llu", q->exec_us);
+        fprintf( f, "start_us: %llu| stop_us: %llu | diff_us: %llu\n", start_us, stop_us, diff_us);
+        fprintf( f, "stage_max: %u| exec_us: %llu\n", afl->stage_max, q->exec_us);
 
-      fprintf(f, "\n");
       fclose(f);
 
     }
@@ -831,7 +880,7 @@ void sync_fuzzers(afl_state_t *afl) {
 
         (void)write_to_testcase(afl, (void **)&mem, st.st_size, 1);
 
-        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout, "fuzz run target 848");
 
         if (afl->stop_soon) { goto close_sync; }
 
@@ -954,6 +1003,21 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
   remove_len = MAX(len_p2 / TRIM_START_STEPS, (u32)TRIM_MIN_BYTES);
 
+    #ifdef INTROSPECTION
+      u8 fnr1[PATH_MAX];
+      snprintf(fnr1, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+      FILE *fr1 = fopen(fnr1, "a");
+      if (fr1) {
+
+          fprintf(
+              fr1,
+              "TRI1M: %u", afl->queue_cur->len);
+        fprintf(fr1, "\n");
+        fclose(fr1);
+      }
+
+    #endif
+
   /* Continue until the number of steps gets too high or the stepover
      gets too small. */
 
@@ -975,7 +1039,7 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
       write_with_gap(afl, in_buf, q->len, remove_pos, trim_avail);
 
-      fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+      fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout, "fuzz run target 1007");
 
       if (afl->stop_soon || fault == FSRV_RUN_ERROR) { goto abort_trimming; }
 
@@ -983,6 +1047,21 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
        */
 
       ++afl->trim_execs;
+    #ifdef INTROSPECTION
+      u8 fnr10[PATH_MAX];
+      snprintf(fnr10, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+      FILE *fr10 = fopen(fnr10, "a");
+      if (fr10) {
+
+// check if they are equal next
+          fprintf(
+              fr10,
+              "CCcksum: %llu| CCq->exec_cksum: %llu", hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST), q->exec_cksum);
+        fprintf(fr10, "\n");
+        fclose(fr10);
+      }
+
+    #endif
       classify_counts(&afl->fsrv);
       cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
 
@@ -991,11 +1070,40 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
          best-effort pass, so it's not a big deal if we end up with false
          negatives every now and then. */
 
+    #ifdef INTROSPECTION
+      u8 fnr9[PATH_MAX];
+      snprintf(fnr9, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+      FILE *fr9 = fopen(fnr9, "a");
+      if (fr9) {
+
+// check if they are equal next
+          fprintf(
+              fr9,
+              "cksum: %llu| q->exec_cksum: %llu", cksum, q->exec_cksum);
+        fprintf(fr9, "\n");
+        fclose(fr9);
+      }
+
+    #endif
       if (cksum == q->exec_cksum) {
 
         u32 move_tail = q->len - remove_pos - trim_avail;
 
         q->len -= trim_avail;
+    #ifdef INTROSPECTION
+      u8 fnr3[PATH_MAX];
+      snprintf(fnr3, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
+      FILE *fr3 = fopen(fnr3, "a");
+      if (fr3) {
+
+          fprintf(
+              fr3,
+              "TRI3M: %u", afl->queue_cur->len);
+        fprintf(fr3, "\n");
+        fclose(fr3);
+      }
+
+    #endif
         len_p2 = next_pow2(q->len);
 
         memmove(in_buf + remove_pos, in_buf + remove_pos + trim_avail,
@@ -1091,7 +1199,7 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   }
 
-  fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+  fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout, "fuzz run target 1152");
 
   if (afl->stop_soon) { return 1; }
 

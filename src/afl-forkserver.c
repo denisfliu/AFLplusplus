@@ -192,6 +192,12 @@ void afl_nyx_runner_kill(afl_forkserver_t *fsrv) {
 static list_t fsrv_list = {.element_prealloc_count = 0};
 
 static void fsrv_exec_child(afl_forkserver_t *fsrv, char **argv) {
+	// BRANDEN DEBUGGING STUFF
+	//FILE *forkthing_debug;
+	//forkthing_debug = fopen("/tmp/forkthing_debug.txt", "a");
+	//fprintf(forkthing_debug, "calling fsrv_exec_child()!!!\n");
+	//fclose(forkthing_debug);
+
 
   if (fsrv->qemu_mode || fsrv->cs_mode) {
 
@@ -379,6 +385,11 @@ restart_select:
   It execvs for each fork, forwarding exit codes and child pids to afl. */
 
 static void afl_fauxsrv_execv(afl_forkserver_t *fsrv, char **argv) {
+	// BRANDEN DEBUGGING STUFF -- we didn't end up in here, so we are not using this
+	// FILE *forkthing_debug;
+	// forkthing_debug = fopen("/tmp/forkthing_debug.txt", "a");
+	// fprintf(forkthing_debug, "calling afl_fauxsrv_execv()!!!\n");
+	// fclose(forkthing_debug);
 
   unsigned char tmp[4] = {0, 0, 0, 0};
   pid_t         child_pid;
@@ -544,6 +555,11 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
 
 #ifdef __linux__
   if (unlikely(fsrv->nyx_mode)) {
+	// BRANDEN DEBUGGING STUFF
+	// FILE *forkthing_debug;
+	// forkthing_debug = fopen("/tmp/forkthing_debug.txt", "a");
+	// fprintf(forkthing_debug, "wait just making sure - are we in nyx_mode??\n");
+	// fclose(forkthing_debug);
 
     if (fsrv->nyx_runner != NULL) { return; }
 
@@ -1537,7 +1553,6 @@ afl_fsrv_write_to_testcase(afl_forkserver_t *fsrv, u8 *buf, size_t len) {
 #endif
 
   } else {
-
     s32 fd = fsrv->out_fd;
 
     if (!fsrv->use_stdin && fsrv->out_file) {
@@ -1571,6 +1586,12 @@ afl_fsrv_write_to_testcase(afl_forkserver_t *fsrv, u8 *buf, size_t len) {
 
     }
 
+    //FILE *fptr;
+    //fptr = fopen("/tmp/yo.txt", "a");
+    //fprintf(fptr, "fsrv->out_file: %d\n", *fsrv->out_file);
+    //fprintf(fptr, "fsrv->out_fd: %d\n", fd);
+    //fclose(fptr);
+
     // fprintf(stderr, "WRITE %d %u\n", fd, len);
     ck_write(fd, buf, len, fsrv->out_file);
 
@@ -1601,7 +1622,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   u32 write_value = fsrv->last_run_timed_out;
 
 #ifdef __linux__
-  if (fsrv->nyx_mode) {
+  if (fsrv->nyx_mode) { // afl-debug: we are not using nyx_mode, ignore this
 
     static uint32_t last_timeout_value = 0;
 
@@ -1662,7 +1683,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
      territory. */
 
 #ifdef __linux__
-  if (!fsrv->nyx_mode) {
+  if (!fsrv->nyx_mode) { // afl-debug: OOPS we DO need to look at this
 
     memset(fsrv->trace_bits, 0, fsrv->map_size);
     MEM_BARRIER();
@@ -1670,14 +1691,14 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   }
 
 #else
-  memset(fsrv->trace_bits, 0, fsrv->map_size);
+  memset(fsrv->trace_bits, 0, fsrv->map_size); // afl-debug note: for now, going to assume these are irrelevant to our replayability
   MEM_BARRIER();
 #endif
 
   /* we have the fork server (or faux server) up and running
   First, tell it if the previous run timed out. */
 
-  if ((res = write(fsrv->fsrv_ctl_fd, &write_value, 4)) != 4) {
+  if ((res = write(fsrv->fsrv_ctl_fd, &write_value, 4)) != 4) { // afl-debug: seems like they look for a write of 4 bytes to the control pipe; this must be the 4-byte "hello" message that is mentioned in the source
 
     if (*stop_soon_p) { return 0; }
     RPFATAL(res, "Unable to request new process from fork server (OOM?)");
@@ -1686,14 +1707,14 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
 
   fsrv->last_run_timed_out = 0;
 
-  if ((res = read(fsrv->fsrv_st_fd, &fsrv->child_pid, 4)) != 4) {
+  if ((res = read(fsrv->fsrv_st_fd, &fsrv->child_pid, 4)) != 4) { // afl-debug: and then they look for a 4-byte read from the status pipe to fsrv->child_pid, which i believe is the forkserver  
 
     if (*stop_soon_p) { return 0; }
     RPFATAL(res, "Unable to request new process from fork server (OOM?)");
 
   }
 
-#ifdef AFL_PERSISTENT_RECORD
+#ifdef AFL_PERSISTENT_RECORD // afl-debug: not using persistent mode, ignore
   // end of persistent loop?
   if (unlikely(fsrv->persistent_record &&
                fsrv->persistent_record_pid != fsrv->child_pid)) {
@@ -1713,7 +1734,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
 
 #endif
 
-  if (fsrv->child_pid <= 0) {
+  if (fsrv->child_pid <= 0) { // afl-debug: if the forkserver is dead...? they write as "Fork server is misbehaving"
 
     if (*stop_soon_p) { return 0; }
 
@@ -1728,9 +1749,9 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   }
 
   exec_ms = read_s32_timed(fsrv->fsrv_st_fd, &fsrv->child_status, timeout,
-                          stop_soon_p);
+                          stop_soon_p); // afl-debug: TODO; need to figure out if this is relevant, since it communicates somehow with the child through status pipe
 
-  if (exec_ms > timeout) {
+  if (exec_ms > timeout) { 
 
     /* If there was no response from forkserver after timeout seconds,
     we kill the child. The forkserver should inform us afterwards */
@@ -1744,10 +1765,11 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
     }
 
     fsrv->last_run_timed_out = 1;
-    if (read(fsrv->fsrv_st_fd, &fsrv->child_status, 4) < 4) { exec_ms = 0; }
+    if (read(fsrv->fsrv_st_fd, &fsrv->child_status, 4) < 4) { exec_ms = 0; } // afl-debug: if no 4-byte read from status pipe to child_status, fork server is not communicating 
 
   }
 
+  // afl-debug: give error if forkserver is dead
   if (!exec_ms) {
 
     if (*stop_soon_p) { return 0; }
@@ -1779,54 +1801,23 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   if (!WIFSTOPPED(fsrv->child_status)) { fsrv->child_pid = -1; }
 
   fsrv->total_execs++;
-
+	
+	// afl-debug: BRANDEN DEBUGGING STUFF
+	//FILE *forkthing_debug;
+	//forkthing_debug = fopen("/tmp/forkthing_debug.txt", "a");
+	//fprintf(forkthing_debug, "afl-forkserver.c 1792 total_execs: %lld\n", fsrv->total_execs);
+	//fclose(forkthing_debug);
+  
   /* Any subsequent operations on fsrv->trace_bits must not be moved by the
      compiler below this point. Past this location, fsrv->trace_bits[]
      behave very normally and do not have to be treated as volatile. */
 
   MEM_BARRIER();
 
-
-/*
-  if (unlikely(fsrv->replay)) {
-    ck_read(fsrv->time_fd[1], &exec_ms, sizeof(exec_ms), "time thingy");
-    ck_read(fsrv->time_fd[1], &fsrv->child_status, sizeof(fsrv->child_status), "time thingy");
-    ck_read(fsrv->time_fd[1], fsrv->trace_bits, sizeof(*fsrv->trace_bits), "time thingy");
-    ck_read(fsrv->time_fd[1], &fsrv->last_run_timed_out, sizeof(fsrv->last_run_timed_out), "time thingy");
-    ck_read(fsrv->time_fd[1], &fsrv->uses_crash_exitcode, sizeof(fsrv->uses_crash_exitcode), "time thingy");
-    ck_read(fsrv->time_fd[1], &fsrv->total_execs, sizeof(fsrv->total_execs), "time thingy");
-  }
-  ck_write(fsrv->time_fd[0], &exec_ms, sizeof(exec_ms), "time thingy");
-  ck_write(fsrv->time_fd[0], &fsrv->child_status, sizeof(fsrv->child_status), "time thingy");
-  ck_write(fsrv->time_fd[0], fsrv->trace_bits, sizeof(*fsrv->trace_bits), "time thingy");
-  ck_write(fsrv->time_fd[0], &fsrv->last_run_timed_out, sizeof(fsrv->last_run_timed_out), "time thingy");
-  ck_write(fsrv->time_fd[0], &fsrv->uses_crash_exitcode, sizeof(fsrv->uses_crash_exitcode), "time thingy");
-  ck_write(fsrv->time_fd[0], &fsrv->total_execs, sizeof(fsrv->total_execs), "time thingy");
-
-  #ifdef INTROSPECTION
-    u8 fn1[PATH_MAX];
-    snprintf(fn1, PATH_MAX, "dryrunthing.txt");
-    FILE *f1 = fopen(fn1, "a");
-    if (f1) {
-
-        fprintf( f1, "child_pid: %u\n", fsrv->child_pid);
-        fprintf( f1, "child_status: %u\n", fsrv->child_status);
-        fprintf( f1, "exec_ms: %u\n", exec_ms);
-        fprintf( f1, "trace bits: %s\n", fsrv->trace_bits);
-        fprintf( f1, "lastruntimedout: %u\n", fsrv->last_run_timed_out);
-        fprintf( f1, "usescrashexitcode: %u\n", fsrv->uses_crash_exitcode);
-
-      fprintf(f1, "\n");
-      fclose(f1);
-
-    }
-  #endif
-  */
-
   /* Report outcome to caller. */
 
   /* Was the run unsuccessful? */
-  if (unlikely(*(u32 *)fsrv->trace_bits == EXEC_FAIL_SIG)) {
+  if (unlikely(*(u32 *)fsrv->trace_bits == EXEC_FAIL_SIG)) { // afl-debug: trace_bits are used to check certain signatures; here it checks for the execution fail signature
 
     return FSRV_RUN_ERROR;
 
@@ -1846,6 +1837,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
   abort_on_error. On top, a user may specify a custom AFL_CRASH_EXITCODE.
   Handle all three cases here. */
 
+  // afl-debug: a bunch of checks about errors; everything after this point is related to the return code/value
   if (unlikely(
           /* A normal crash/abort */
           (WIFSIGNALED(fsrv->child_status)) ||
@@ -1857,7 +1849,7 @@ afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
           (fsrv->uses_crash_exitcode &&
            WEXITSTATUS(fsrv->child_status) == fsrv->crash_exitcode))) {
 
-#ifdef AFL_PERSISTENT_RECORD
+#ifdef AFL_PERSISTENT_RECORD // afl-debug: again, we don't use persistent mode
     if (unlikely(fsrv->persistent_record)) {
 
       char fn[PATH_MAX];

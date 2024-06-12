@@ -749,7 +749,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
 
         }
 
-        new_fault = fuzz_run_target(afl, &afl->fsrv, afl->hang_tmout);
+        new_fault = fuzz_run_target(afl, &afl->fsrv, afl->hang_tmout, "fuzz run target 752");
         classify_counts(&afl->fsrv);
 
         /* A corner case that one user reported bumping into: increasing the

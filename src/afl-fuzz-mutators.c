@@ -527,7 +527,7 @@ u8 trim_case_custom(afl_state_t *afl, struct queue_entry *q, u8 *in_buf,
 
       } else {
 
-        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout, "fuzz run target 530");
         ++afl->trim_execs;
 
         if (afl->stop_soon || fault == FSRV_RUN_ERROR) { goto abort_trimming; }

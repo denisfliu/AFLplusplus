@@ -100,13 +100,16 @@ typedef struct afl_forkserver {
 
   /* a program that includes afl-forkserver needs to define these */
 
+  // denis: we need this
   u8 *trace_bits;                       /* SHM with instrumentation bitmap  */
 
+  // denis: we may need the child_status? not sure
   s32 fsrv_pid,                         /* PID of the fork server           */
       child_pid,                        /* PID of the fuzzed program        */
       child_status,                     /* waitpid result for the child     */
       out_dir_fd;                       /* FD of the lock file              */
 
+  // denis: we won't need any of these fds
   s32 out_fd,                           /* Persistent fd for fsrv->out_file */
       dev_urandom_fd,                   /* Persistent fd for /dev/urandom   */
       time_fd[2],                      /* Persistent fds for get_cur_time   */
@@ -116,6 +119,7 @@ typedef struct afl_forkserver {
       fsrv_ctl_fd,                      /* Fork server control pipe (write) */
       fsrv_st_fd;                       /* Fork server status pipe (read)   */
 
+  // denis: i don't think we need any of these 
   u32 exec_tmout;                       /* Configurable exec timeout (ms)   */
   u32 init_tmout;                       /* Configurable init timeout (ms)   */
   u32 map_size;                         /* map size used by the target      */
@@ -123,18 +127,21 @@ typedef struct afl_forkserver {
   u32 snapshot;                         /* is snapshot feature used         */
   u64 mem_limit;                        /* Memory cap for child (MB)        */
 
-  u64 total_execs;                      /* How often run_target was called  */
+  // denis: idk how this is used
+  u64 total_execs;                      /* How often run_target was called  */ // branden: BrandenTest/afl_fs_struct.txt
 
   u8 *out_file,                         /* File to fuzz, if any             */
-      *target_path;                     /* Path of the target               */
+      *target_path;                     /* Path of the target               */ 
 
   FILE *plot_file;                      /* Gnuplot output file              */
 
   /* Note: last_run_timed_out is u32 to send it to the child as 4 byte array */
+  // denis: not sure if we need the following u32 and u8 but we can do it anyway
   u32 last_run_timed_out;               /* Traced process timed out?        */
 
   u8 last_kill_signal;                  /* Signal that killed the child     */
 
+  // denis: probably don't need any of these bools
   bool use_shmem_fuzz;                  /* use shared mem for test cases    */
 
   bool support_shmem_fuzz;              /* set by afl-fuzz                  */
@@ -162,6 +169,7 @@ typedef struct afl_forkserver {
   bool uses_crash_exitcode;             /* Custom crash exitcode specified? */
   u8   crash_exitcode;                  /* The crash exitcode specified     */
 
+  // denis: possibly will need
   u32 *shmem_fuzz_len;                  /* length of the fuzzing test case  */
 
   u8 *shmem_fuzz;                       /* allocated memory for fuzzing     */
