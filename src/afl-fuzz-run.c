@@ -81,36 +81,18 @@ fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv, u32 timeout, u8 origin
   // indicate that we're doing something spicy
   const char *str1 = "replay_indicator_fsrv";
   int trash = atoi(str1);
-  (void)trash;
+  void * more_trash;
 
-  // fault value interception
-  char str2[21];
-  sprintf(str2, "%d", res);
-  res = atoi(str2);
+  // fault value interception and other trace_bits stuff
+  more_trash = realloc(&res, sizeof(res));
+  more_trash = realloc(fsrv->trace_bits, fsrv->map_size);
+  more_trash = realloc(&fsrv->total_execs, sizeof(fsrv->total_execs));
+  more_trash = realloc(&fsrv->last_run_timed_out, sizeof(fsrv->last_run_timed_out));
 
-
-  u8 *ptr = fsrv->trace_bits;
-  u32  i = (fsrv-> map_size >> 2);
-
-  while (i--) {
-    memset(str2, 0, sizeof(str2));
-    sprintf(str2, "%d", *(ptr));
-    *(ptr++) = (strtoul(str2, NULL, 10)); // this needs to be implemented in afl-debug
-  }
-
-    memset(str2, 0, sizeof(str2));
-    sprintf(str2, "%llu", fsrv->total_execs);
-    fsrv->total_execs = strtoull(str2, NULL, 10);
-
-    memset(str2, 0, sizeof(str2));
-    sprintf(str2, "%u", fsrv->last_run_timed_out);
-    fsrv->last_run_timed_out = strtoull(str2, NULL, 10);
-
-
-
-  // indicate that we're done with the stuff (note: need to fix the thing in afl-debug)
+  // indicate that we're done
   trash = atoi(str1);
   (void)trash;
+  (void)more_trash;
 
   #endif
 
@@ -543,7 +525,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   }
 
-  start_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
+  start_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay, afl->out_dir, "time_us 528");
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
     if (unlikely(afl->debug)) {
@@ -635,7 +617,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   } else {
 
-    stop_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
+    stop_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay, afl->out_dir, "time_us 620");
     diff_us = stop_us - start_us;
     if (unlikely(!diff_us)) { ++diff_us; }
 
@@ -661,8 +643,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
     FILE *f = fopen(fn, "a");
     if (f) {
 
-        fprintf( f, "start_us: %llu| stop_us: %llu | diff_us: %llu\n", start_us, stop_us, diff_us);
-        fprintf( f, "stage_max: %u| exec_us: %llu\n", afl->stage_max, q->exec_us);
+        fprintf( f, "start_us: %llu| stop_us: %llu | diff_us: %llu | stage_max: %u | exec_us: %llu\n", start_us, stop_us, diff_us, afl->stage_max, q->exec_us);
 
       fclose(f);
 
@@ -885,21 +866,21 @@ void sync_fuzzers(afl_state_t *afl) {
         if (afl->stop_soon) { goto close_sync; }
 
         afl->syncing_party = sd_ent->d_name;
+        u8 res = save_if_interesting(afl, mem,st.st_size, fault);
   #ifdef INTROSPECTION
     u8 fn[PATH_MAX];
     snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
     FILE *f = fopen(fn, "a");
     if (f) {
 
-        fprintf( f, "save_if_interesting sync_fuzzers");
+        fprintf( f, "save_if_interesting sync_fuzzers, res: %u", res);
 
       fprintf(f, "\n");
       fclose(f);
 
     }
   #endif
-        afl->queued_imported +=
-            save_if_interesting(afl, mem, st.st_size, fault);
+        afl->queued_imported += res;
         afl->syncing_party = 0;
 
         munmap(mem, st.st_size);
@@ -1231,6 +1212,7 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   /* This handles FAULT_ERROR for us: */
 
+  u8 res = save_if_interesting(afl, out_buf, len, fault);
   #ifdef INTROSPECTION
     u8 fn[PATH_MAX];
     snprintf(fn, PATH_MAX, "%s/replay/check.txt", afl->out_dir);
@@ -1239,14 +1221,14 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
         fprintf( f, "afl->queued_items: %u\n", afl->queued_items);
         fprintf( f, "fault: %u\n", fault);
-        fprintf( f, "save_if_interesting common_fuzz_stuff");
+        fprintf( f, "save_if_interesting common_fuzz_stuff, res: %u", res);
 
       fprintf(f, "\n");
       fclose(f);
 
     }
   #endif
-  afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault);
+  afl->queued_discovered += res;
   #ifdef INTROSPECTION
     f = fopen(fn, "a");
     if (f) {

@@ -332,14 +332,14 @@ static u8 colorization(afl_state_t *afl, u8 *buf, u32 len,
     memcpy(buf + rng->start, changed + rng->start, s);
 
     u64 cksum = 0;
-    u64 start_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
+    u64 start_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay, afl->out_dir, "time_us redqueen 335");
     if (unlikely(get_exec_checksum(afl, buf, len, &cksum))) {
 
       goto checksum_fail;
 
     }
 
-    u64 stop_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay);
+    u64 stop_us = get_replayable_time_us(afl->fsrv.time_fd, afl->replay, afl->out_dir, "time_us redqueen 342");
 
     /* Discard if the mutations change the path or if it is too decremental
       in speed - how could the same path have a much different speed

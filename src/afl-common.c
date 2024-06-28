@@ -1004,7 +1004,7 @@ u64 get_cur_time_us(void) {
 
 /* Get unix time in microseconds */
 
-u64 get_replayable_time_us(s32 time_fd[2], int replay) {
+u64 get_replayable_time_us(s32 time_fd[2], int replay, u8 *fname, u8 *origin) {
 
   u64 time;
   if (unlikely(replay)) {
@@ -1014,6 +1014,19 @@ u64 get_replayable_time_us(s32 time_fd[2], int replay) {
   }
 
   ck_write(time_fd[0], &time, sizeof(time), "time_replay_get_cur_time_us");
+  #ifdef INTROSPECTION
+    u8 fn[PATH_MAX];
+    snprintf(fn, PATH_MAX, "%s/replay/check.txt", fname);
+    FILE *f = fopen(fn, "a");
+    if (f) {
+
+        fprintf( f, "get_cur_time_us: %s", origin);
+
+      fprintf(f, "\n");
+      fclose(f);
+
+    }
+  #endif
   return time;
 
 }
